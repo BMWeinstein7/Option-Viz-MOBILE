@@ -22,24 +22,24 @@ export function MetricCard({ label, value, color, small }: MetricCardProps) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.bgCardElevated,
-    borderRadius: 12,
+    backgroundColor: Colors.glassElevated,
+    borderRadius: 14,
     padding: 14,
     flex: 1,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.glassBorder,
   },
   small: {
     padding: 10,
-    borderRadius: 10,
+    borderRadius: 12,
   },
   label: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: Colors.textMuted,
     fontFamily: "Inter_500Medium",
     marginBottom: 6,
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   labelSmall: {
     fontSize: 10,

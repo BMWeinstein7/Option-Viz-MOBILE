@@ -8,14 +8,15 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { AppProvider } from "@/context/AppContext";
+import { AppProvider, useAppContext } from "@/context/AppContext";
+import { AuthScreen } from "@/components/AuthScreen";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -23,12 +24,27 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 2,
-      staleTime: 30000,
+      staleTime: 5000,
     },
   },
 });
 
-function RootLayoutNav() {
+function AuthGate() {
+  const { user, isAuthLoading, login, register } = useAppContext();
+  const [isGuest, setIsGuest] = useState(false);
+
+  if (isAuthLoading) return null;
+
+  if (!user && !isGuest) {
+    return (
+      <AuthScreen
+        onLogin={login}
+        onRegister={register}
+        onGuest={() => setIsGuest(true)}
+      />
+    );
+  }
+
   return (
     <Stack screenOptions={{ headerBackTitle: "Back", headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -60,7 +76,7 @@ export default function RootLayout() {
           <AppProvider>
             <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
-                <RootLayoutNav />
+                <AuthGate />
               </KeyboardProvider>
             </GestureHandlerRootView>
           </AppProvider>
