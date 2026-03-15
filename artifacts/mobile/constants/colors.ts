@@ -1,32 +1,36 @@
 export const Colors = {
-  bg: "#0A0E1A",
-  bgCard: "#111827",
-  bgCardElevated: "#1A2235",
-  bgInput: "#1E2A3A",
-  border: "#1E2D45",
-  borderLight: "#243350",
+  bg: "#0D0D12",
+  bgCard: "#161620",
+  bgCardElevated: "#1C1C28",
+  bgInput: "#1A1A26",
+  border: "rgba(255,255,255,0.06)",
+  borderLight: "rgba(255,255,255,0.10)",
 
-  accent: "#22c55e",
-  accentDim: "rgba(34,197,94,0.15)",
-  accentBright: "#4ade80",
+  glass: "rgba(255,255,255,0.03)",
+  glassBorder: "rgba(255,255,255,0.08)",
+  glassElevated: "rgba(255,255,255,0.05)",
 
-  red: "#ef4444",
-  redDim: "rgba(239,68,68,0.15)",
+  accent: "#0ABAB5",
+  accentDim: "rgba(10,186,181,0.12)",
+  accentBright: "#2DD4BF",
 
-  blue: "#3b82f6",
-  blueDim: "rgba(59,130,246,0.15)",
+  red: "#F43F5E",
+  redDim: "rgba(244,63,94,0.12)",
 
-  gold: "#f59e0b",
-  goldDim: "rgba(245,158,11,0.15)",
+  blue: "#38BDF8",
+  blueDim: "rgba(56,189,248,0.12)",
 
-  purple: "#a855f7",
-  purpleDim: "rgba(168,85,247,0.15)",
+  gold: "#FBBF24",
+  goldDim: "rgba(251,191,36,0.12)",
 
-  textPrimary: "#F0F4FF",
-  textSecondary: "#8899BB",
-  textMuted: "#4A5A7A",
+  purple: "#A78BFA",
+  purpleDim: "rgba(167,139,250,0.12)",
 
-  tabBar: "rgba(10,14,26,0.92)",
+  textPrimary: "#EAEAF0",
+  textSecondary: "#8B8B9E",
+  textMuted: "#4A4A5E",
+
+  tabBar: "rgba(13,13,18,0.95)",
   white: "#FFFFFF",
 };
 

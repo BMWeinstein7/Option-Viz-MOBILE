@@ -51,11 +51,11 @@ interface GreeksBarProps {
 export function GreeksBar({ delta, gamma, theta, vega, rho }: GreeksBarProps) {
   return (
     <View style={styles.container}>
-      <GreekRow label="Δ" value={delta} range={[-1, 1]} description="Delta" />
-      <GreekRow label="Γ" value={gamma} range={[0, 0.1]} description="Gamma" />
-      <GreekRow label="Θ" value={theta} range={[-0.5, 0.1]} description="Theta" />
+      <GreekRow label="\u0394" value={delta} range={[-1, 1]} description="Delta" />
+      <GreekRow label="\u0393" value={gamma} range={[0, 0.1]} description="Gamma" />
+      <GreekRow label="\u0398" value={theta} range={[-0.5, 0.1]} description="Theta" />
       <GreekRow label="V" value={vega} range={[0, 1]} description="Vega" />
-      <GreekRow label="ρ" value={rho} range={[-0.5, 0.5]} description="Rho" />
+      <GreekRow label="\u03C1" value={rho} range={[-0.5, 0.5]} description="Rho" />
     </View>
   );
 }
@@ -86,8 +86,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   track: {
-    height: 6,
-    backgroundColor: Colors.bgInput,
+    height: 5,
+    backgroundColor: Colors.glass,
     borderRadius: 3,
     overflow: "hidden",
   },

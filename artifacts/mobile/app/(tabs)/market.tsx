@@ -17,15 +17,45 @@ import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { POPULAR_TICKERS } from "@/constants/strategies";
 import { api, OptionsChain, StockQuote, FlowEntry, PutCallRatio } from "@/hooks/useApi";
+import { ProfileButton } from "@/components/ProfileMenu";
 
 type MarketView = "quotes" | "chain" | "flow";
+
+function useStreamingQuote(ticker: string, enabled: boolean): StockQuote | null {
+  const [quote, setQuote] = useState<StockQuote | null>(null);
+  const sourceRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    if (!enabled || !ticker || typeof EventSource === "undefined") return;
+
+    const url = api.getStreamUrl(ticker);
+    const source = new EventSource(url);
+    sourceRef.current = source;
+
+    source.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setQuote(data);
+      } catch {}
+    };
+    source.onerror = () => {
+      source.close();
+    };
+    return () => {
+      source.close();
+      sourceRef.current = null;
+    };
+  }, [ticker, enabled]);
+
+  return quote;
+}
 
 function QuoteRow({ ticker, onPress }: { ticker: string; onPress?: () => void }) {
   const { data, isLoading } = useQuery({
     queryKey: ["quote", ticker],
     queryFn: () => api.getQuote(ticker),
-    refetchInterval: 5000,
-    staleTime: 3000,
+    refetchInterval: 3000,
+    staleTime: 2000,
   });
 
   if (isLoading || !data) {
@@ -43,9 +73,7 @@ function QuoteRow({ ticker, onPress }: { ticker: string; onPress?: () => void })
     <Pressable style={styles.quoteRow} onPress={onPress}>
       <View style={styles.quoteRowLeft}>
         <Text style={styles.quoteRowTicker}>{data.ticker}</Text>
-        <Text style={styles.quoteRowName} numberOfLines={1}>
-          {data.name}
-        </Text>
+        <Text style={styles.quoteRowName} numberOfLines={1}>{data.name}</Text>
       </View>
       <View style={styles.quoteRowRight}>
         <Text style={styles.quoteRowPrice}>${data.price.toFixed(2)}</Text>
@@ -75,12 +103,14 @@ function QuoteRow({ ticker, onPress }: { ticker: string; onPress?: () => void })
 }
 
 function LiveQuoteDetail({ ticker }: { ticker: string }) {
-  const { data } = useQuery({
+  const polled = useQuery({
     queryKey: ["quote", ticker],
     queryFn: () => api.getQuote(ticker),
     refetchInterval: 3000,
     staleTime: 2000,
   });
+  const streamed = useStreamingQuote(ticker, true);
+  const data = streamed || polled.data;
 
   if (!data) return null;
 
@@ -111,7 +141,7 @@ function LiveQuoteDetail({ ticker }: { ticker: string }) {
           </Text>
           <View style={styles.liveBadge}>
             <View style={styles.liveDot} />
-            <Text style={styles.liveText}>LIVE</Text>
+            <Text style={styles.liveText}>STREAMING</Text>
           </View>
         </View>
       </View>
@@ -166,7 +196,6 @@ export default function MarketScreen() {
   const [view, setView] = useState<MarketView>("quotes");
   const [searchInput, setSearchInput] = useState("");
   const [searchTicker, setSearchTicker] = useState("");
-  const [watchlist, setWatchlist] = useState<string[]>([]);
   const [chainTicker, setChainTicker] = useState("SPY");
   const [chainInput, setChainInput] = useState("SPY");
   const [selectedExp, setSelectedExp] = useState("");
@@ -190,31 +219,29 @@ export default function MarketScreen() {
     queryKey: ["chain", chainTicker, activeExp],
     queryFn: () => api.getChain(chainTicker, activeExp),
     enabled: view === "chain" && !!chainTicker && !!activeExp,
-    refetchInterval: 10000,
-    staleTime: 8000,
+    refetchInterval: 8000,
+    staleTime: 6000,
   });
 
   const { data: flowData, isLoading: flowLoading } = useQuery({
     queryKey: ["flow", flowTicker],
     queryFn: () => api.getFlow(flowTicker),
     enabled: view === "flow" && !!flowTicker,
-    refetchInterval: 15000,
-    staleTime: 10000,
+    refetchInterval: 10000,
+    staleTime: 8000,
   });
 
   const { data: pcrData } = useQuery({
     queryKey: ["pcr", flowTicker],
     queryFn: () => api.getPutCallRatio(flowTicker),
     enabled: view === "flow" && !!flowTicker,
-    refetchInterval: 15000,
-    staleTime: 10000,
+    refetchInterval: 10000,
+    staleTime: 8000,
   });
 
   const handleTickerSearch = useCallback(() => {
     const val = searchInput.trim().toUpperCase();
-    if (val) {
-      setSearchTicker(val);
-    }
+    if (val) setSearchTicker(val);
   }, [searchInput]);
 
   const handleChainSearch = useCallback(() => {
@@ -225,23 +252,22 @@ export default function MarketScreen() {
   }, [chainInput]);
 
   const handleFlowSearch = useCallback(() => {
-    if (flowInput.trim()) {
-      setFlowTicker(flowInput.trim().toUpperCase());
-    }
+    if (flowInput.trim()) setFlowTicker(flowInput.trim().toUpperCase());
   }, [flowInput]);
 
   return (
     <View
-      style={[
-        styles.root,
-        {
-          paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0),
-          paddingBottom: Platform.OS === "web" ? 34 : 0,
-        },
-      ]}
+      style={[styles.root, {
+        paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0),
+        paddingBottom: Platform.OS === "web" ? 34 : 0,
+      }]}
     >
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Market Data</Text>
+        <ProfileButton />
+      </View>
+
+      <View style={styles.segmentContainer}>
         <View style={styles.segmentRow}>
           {(["quotes", "chain", "flow"] as MarketView[]).map((v) => (
             <Pressable
@@ -294,16 +320,13 @@ export default function MarketScreen() {
                 {index > 0 && <View style={styles.separator} />}
                 <QuoteRow
                   ticker={item}
-                  onPress={() => {
-                    setSearchTicker(item);
-                    setSearchInput(item);
-                  }}
+                  onPress={() => { setSearchTicker(item); setSearchInput(item); }}
                 />
               </View>
             )}
             ListHeaderComponent={
               <Text style={styles.sectionLabel}>
-                {searchTicker ? `Showing ${searchTicker} + Popular Tickers` : "All US Tickers — Auto-Refreshing"}
+                {searchTicker ? `${searchTicker} + Popular` : "All US Tickers \u2014 Streaming"}
               </Text>
             }
           />
@@ -345,18 +368,10 @@ export default function MarketScreen() {
                 {expirations.expirations.map((exp) => (
                   <Pressable
                     key={exp}
-                    style={[
-                      styles.expChip,
-                      activeExp === exp && styles.expChipSelected,
-                    ]}
+                    style={[styles.expChip, activeExp === exp && styles.expChipSelected]}
                     onPress={() => setSelectedExp(exp)}
                   >
-                    <Text
-                      style={[
-                        styles.expChipText,
-                        activeExp === exp && styles.expChipTextSelected,
-                      ]}
-                    >
+                    <Text style={[styles.expChipText, activeExp === exp && styles.expChipTextSelected]}>
                       {exp}
                     </Text>
                   </Pressable>
@@ -369,21 +384,13 @@ export default function MarketScreen() {
             {(["calls", "puts"] as const).map((t) => (
               <Pressable
                 key={t}
-                style={[
-                  styles.callsPutsBtn,
-                  chainTab === t && {
-                    backgroundColor: t === "calls" ? Colors.accentDim : Colors.redDim,
-                    borderColor: t === "calls" ? Colors.accent : Colors.red,
-                  },
-                ]}
+                style={[styles.callsPutsBtn, chainTab === t && {
+                  backgroundColor: t === "calls" ? Colors.accentDim : Colors.redDim,
+                  borderColor: t === "calls" ? Colors.accent + "40" : Colors.red + "40",
+                }]}
                 onPress={() => setChainTab(t)}
               >
-                <Text
-                  style={[
-                    styles.callsPutsText,
-                    chainTab === t && { color: t === "calls" ? Colors.accent : Colors.red },
-                  ]}
-                >
+                <Text style={[styles.callsPutsText, chainTab === t && { color: t === "calls" ? Colors.accent : Colors.red }]}>
                   {t === "calls" ? "Calls" : "Puts"}
                 </Text>
               </Pressable>
@@ -408,37 +415,16 @@ export default function MarketScreen() {
                 keyExtractor={(item, i) => `${item.strike}-${i}`}
                 showsVerticalScrollIndicator={false}
                 renderItem={({ item }) => {
-                  const isAtm =
-                    Math.abs(item.strike - chain.spotPrice) <
-                    chain.spotPrice * 0.02;
-
+                  const isAtm = Math.abs(item.strike - chain.spotPrice) < chain.spotPrice * 0.02;
                   return (
-                    <View
-                      style={[
-                        styles.chainRow,
-                        isAtm && styles.chainRowAtm,
-                        item.inTheMoney && styles.chainRowItm,
-                      ]}
-                    >
-                      <Text style={[styles.chainCell, { flex: 0.8, fontFamily: "Inter_700Bold" }]}>
-                        ${item.strike}
-                      </Text>
-                      <Text style={[styles.chainCell, { color: Colors.accent }]}>
-                        {item.bid.toFixed(2)}
-                      </Text>
-                      <Text style={[styles.chainCell, { color: Colors.red }]}>
-                        {item.ask.toFixed(2)}
-                      </Text>
-                      <Text style={styles.chainCell}>
-                        {item.volume > 999 ? `${(item.volume / 1000).toFixed(1)}K` : item.volume}
-                      </Text>
-                      <Text style={styles.chainCell}>
-                        {item.openInterest > 999 ? `${(item.openInterest / 1000).toFixed(1)}K` : item.openInterest}
-                      </Text>
+                    <View style={[styles.chainRow, isAtm && styles.chainRowAtm, item.inTheMoney && styles.chainRowItm]}>
+                      <Text style={[styles.chainCell, { flex: 0.8, fontFamily: "Inter_700Bold" }]}>${item.strike}</Text>
+                      <Text style={[styles.chainCell, { color: Colors.accent }]}>{item.bid.toFixed(2)}</Text>
+                      <Text style={[styles.chainCell, { color: Colors.red }]}>{item.ask.toFixed(2)}</Text>
+                      <Text style={styles.chainCell}>{item.volume > 999 ? `${(item.volume / 1000).toFixed(1)}K` : item.volume}</Text>
+                      <Text style={styles.chainCell}>{item.openInterest > 999 ? `${(item.openInterest / 1000).toFixed(1)}K` : item.openInterest}</Text>
                       <Text style={styles.chainCell}>{item.impliedVolatility.toFixed(0)}%</Text>
-                      <Text style={[styles.chainCell, { color: Colors.blue }]}>
-                        {item.delta?.toFixed(2) ?? "\u2014"}
-                      </Text>
+                      <Text style={[styles.chainCell, { color: Colors.blue }]}>{item.delta?.toFixed(2) ?? "\u2014"}</Text>
                     </View>
                   );
                 }}
@@ -449,11 +435,7 @@ export default function MarketScreen() {
       )}
 
       {view === "flow" && (
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.chainSearch}>
             <TextInput
               style={styles.chainInput}
@@ -482,10 +464,7 @@ export default function MarketScreen() {
               <View style={styles.pcrStats}>
                 <View style={styles.pcrStat}>
                   <Text style={styles.pcrStatLabel}>VOL RATIO</Text>
-                  <Text style={[
-                    styles.pcrStatValue,
-                    { color: pcrData.volRatio > 1 ? Colors.red : Colors.accent }
-                  ]}>
+                  <Text style={[styles.pcrStatValue, { color: pcrData.volRatio > 1 ? Colors.red : Colors.accent }]}>
                     {pcrData.volRatio.toFixed(3)}
                   </Text>
                   <Text style={styles.pcrStatHint}>
@@ -494,10 +473,7 @@ export default function MarketScreen() {
                 </View>
                 <View style={styles.pcrStat}>
                   <Text style={styles.pcrStatLabel}>OI RATIO</Text>
-                  <Text style={[
-                    styles.pcrStatValue,
-                    { color: pcrData.oiRatio > 1 ? Colors.red : Colors.accent }
-                  ]}>
+                  <Text style={[styles.pcrStatValue, { color: pcrData.oiRatio > 1 ? Colors.red : Colors.accent }]}>
                     {pcrData.oiRatio.toFixed(3)}
                   </Text>
                 </View>
@@ -551,450 +527,133 @@ export default function MarketScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: Colors.bg,
-  },
+  root: { flex: 1, backgroundColor: Colors.bg },
   header: {
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    paddingTop: 8,
-    gap: 12,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 20, paddingBottom: 12, paddingTop: 8,
   },
-  headerTitle: {
-    fontSize: 22,
-    fontFamily: "Inter_700Bold",
-    color: Colors.textPrimary,
-  },
+  headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold", color: Colors.textPrimary },
+  segmentContainer: { paddingHorizontal: 20, marginBottom: 12 },
   segmentRow: {
-    flexDirection: "row",
-    backgroundColor: Colors.bgCard,
-    borderRadius: 10,
-    padding: 3,
-    gap: 2,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    flexDirection: "row", backgroundColor: Colors.glass, borderRadius: 12, padding: 3, gap: 2,
+    borderWidth: 1, borderColor: Colors.glassBorder,
   },
-  segment: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  segmentActive: {
-    backgroundColor: Colors.bgCardElevated,
-  },
-  segmentText: {
-    fontSize: 12,
-    fontFamily: "Inter_500Medium",
-    color: Colors.textMuted,
-  },
-  segmentTextActive: {
-    color: Colors.textPrimary,
-    fontFamily: "Inter_600SemiBold",
-  },
-  searchBarContainer: {
-    flexDirection: "row",
-    paddingHorizontal: 20,
-    gap: 10,
-    marginBottom: 12,
-  },
+  segment: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: "center" },
+  segmentActive: { backgroundColor: Colors.glassElevated },
+  segmentText: { fontSize: 12, fontFamily: "Inter_500Medium", color: Colors.textMuted },
+  segmentTextActive: { color: Colors.textPrimary, fontFamily: "Inter_600SemiBold" },
+  searchBarContainer: { flexDirection: "row", paddingHorizontal: 20, gap: 10, marginBottom: 12 },
   searchBar: {
-    flex: 1,
-    backgroundColor: Colors.bgInput,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    color: Colors.textPrimary,
-    fontFamily: "Inter_500Medium",
-    fontSize: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    flex: 1, backgroundColor: Colors.bgCard, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11,
+    color: Colors.textPrimary, fontFamily: "Inter_500Medium", fontSize: 14,
+    borderWidth: 1, borderColor: Colors.glassBorder,
   },
-  searchBarBtn: {
-    backgroundColor: Colors.accent,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    justifyContent: "center",
-  },
+  searchBarBtn: { backgroundColor: Colors.accent, borderRadius: 14, paddingHorizontal: 16, justifyContent: "center" },
   liveDetail: {
-    backgroundColor: Colors.bgCard,
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 12,
+    backgroundColor: Colors.glassElevated, borderRadius: 16, padding: 14,
+    borderWidth: 1, borderColor: Colors.glassBorder, gap: 12,
   },
-  liveDetailTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  liveDetailName: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: "Inter_400Regular",
-    marginBottom: 4,
-  },
-  liveDetailPrice: {
-    fontSize: 26,
-    fontFamily: "Inter_700Bold",
-    color: Colors.textPrimary,
-  },
-  liveDetailChange: {
-    alignItems: "flex-end",
-    gap: 6,
-  },
-  liveDetailChg: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-  },
+  liveDetailTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  liveDetailName: { fontSize: 12, color: Colors.textMuted, fontFamily: "Inter_400Regular", marginBottom: 4 },
+  liveDetailPrice: { fontSize: 26, fontFamily: "Inter_700Bold", color: Colors.textPrimary },
+  liveDetailChange: { alignItems: "flex-end", gap: 6 },
+  liveDetailChg: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   liveBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: Colors.accentDim,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: Colors.accentDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
   },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.accent,
-  },
-  liveText: {
-    fontSize: 9,
-    fontFamily: "Inter_700Bold",
-    color: Colors.accent,
-    letterSpacing: 0.5,
-  },
-  liveStats: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  liveStat: {
-    gap: 2,
-    minWidth: 55,
-  },
-  liveStatLabel: {
-    fontSize: 9,
-    color: Colors.textMuted,
-    fontFamily: "Inter_500Medium",
-    letterSpacing: 0.5,
-  },
-  liveStatValue: {
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.textPrimary,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 120,
-    gap: 12,
-  },
+  liveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.accent },
+  liveText: { fontSize: 9, fontFamily: "Inter_700Bold", color: Colors.accent, letterSpacing: 0.5 },
+  liveStats: { flexDirection: "row", justifyContent: "space-between" },
+  liveStat: { alignItems: "center" },
+  liveStatLabel: { fontSize: 9, color: Colors.textMuted, fontFamily: "Inter_500Medium", letterSpacing: 0.5 },
+  liveStatValue: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.textPrimary, marginTop: 2 },
   sectionLabel: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    fontFamily: "Inter_500Medium",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginBottom: 8,
-    marginTop: 4,
-    paddingHorizontal: 20,
+    fontSize: 11, color: Colors.textMuted, fontFamily: "Inter_500Medium",
+    textTransform: "uppercase", letterSpacing: 0.8, paddingHorizontal: 20, paddingBottom: 8,
   },
   quoteRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingVertical: 14, paddingHorizontal: 20,
   },
-  quoteRowLeft: {
-    flex: 1,
-    gap: 2,
-  },
-  quoteRowTicker: {
-    fontSize: 15,
-    fontFamily: "Inter_700Bold",
-    color: Colors.textPrimary,
-  },
-  quoteRowName: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    fontFamily: "Inter_400Regular",
-  },
-  quoteRowRight: {
-    alignItems: "flex-end",
-    gap: 4,
-  },
-  quoteRowPrice: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.textPrimary,
-  },
-  changeChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  changeText: {
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
-  },
-  separator: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginHorizontal: 20,
-  },
-  chainContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
-    gap: 12,
-    paddingBottom: 120,
-  },
-  chainSearch: {
-    flexDirection: "row",
-    gap: 10,
-  },
+  quoteRowLeft: { flex: 1 },
+  quoteRowTicker: { fontSize: 15, fontFamily: "Inter_700Bold", color: Colors.textPrimary },
+  quoteRowName: { fontSize: 12, color: Colors.textMuted, fontFamily: "Inter_400Regular", marginTop: 2, maxWidth: 180 },
+  quoteRowRight: { alignItems: "flex-end", gap: 4 },
+  quoteRowPrice: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: Colors.textPrimary },
+  changeChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  changeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  separator: { height: 1, backgroundColor: Colors.glassBorder, marginHorizontal: 20 },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 120 },
+  chainContainer: { flex: 1, paddingHorizontal: 20, gap: 10 },
+  chainSearch: { flexDirection: "row", gap: 10 },
   chainInput: {
-    flex: 1,
-    backgroundColor: Colors.bgInput,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: Colors.textPrimary,
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 15,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    flex: 1, backgroundColor: Colors.bgCard, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11,
+    color: Colors.textPrimary, fontFamily: "Inter_500Medium", fontSize: 14,
+    borderWidth: 1, borderColor: Colors.glassBorder,
   },
-  chainSearchBtn: {
-    backgroundColor: Colors.accent,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    justifyContent: "center",
-  },
+  chainSearchBtn: { backgroundColor: Colors.accent, borderRadius: 14, paddingHorizontal: 16, justifyContent: "center" },
   chainMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: Colors.glassElevated, borderRadius: 12, padding: 12,
+    borderWidth: 1, borderColor: Colors.glassBorder,
   },
-  chainTicker: {
-    fontSize: 18,
-    fontFamily: "Inter_700Bold",
-    color: Colors.textPrimary,
-  },
-  chainSpot: {
-    fontSize: 14,
-    fontFamily: "Inter_500Medium",
-    color: Colors.blue,
-  },
-  expScroll: {
-    flexGrow: 0,
-  },
-  expRow: {
-    flexDirection: "row",
-    gap: 8,
-    paddingVertical: 4,
-  },
+  chainTicker: { fontSize: 17, fontFamily: "Inter_700Bold", color: Colors.textPrimary },
+  chainSpot: { fontSize: 14, color: Colors.textSecondary, fontFamily: "Inter_500Medium", flex: 1 },
+  expScroll: { maxHeight: 40 },
+  expRow: { flexDirection: "row", gap: 8 },
   expChip: {
-    backgroundColor: Colors.bgCardElevated,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
+    backgroundColor: Colors.glassElevated, borderWidth: 1, borderColor: Colors.glassBorder,
   },
-  expChipSelected: {
-    backgroundColor: Colors.accentDim,
-    borderColor: Colors.accent,
-  },
-  expChipText: {
-    fontSize: 12,
-    fontFamily: "Inter_500Medium",
-    color: Colors.textSecondary,
-  },
-  expChipTextSelected: {
-    color: Colors.accent,
-  },
-  callsPutsToggle: {
-    flexDirection: "row",
-    gap: 10,
-  },
+  expChipSelected: { backgroundColor: Colors.accentDim, borderColor: Colors.accent + "40" },
+  expChipText: { fontSize: 12, fontFamily: "Inter_500Medium", color: Colors.textSecondary },
+  expChipTextSelected: { color: Colors.accent, fontFamily: "Inter_600SemiBold" },
+  callsPutsToggle: { flexDirection: "row", gap: 8 },
   callsPutsBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.bgCardElevated,
-    alignItems: "center",
+    flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: "center",
+    backgroundColor: Colors.glassElevated, borderWidth: 1, borderColor: Colors.glassBorder,
   },
-  callsPutsText: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.textSecondary,
-  },
+  callsPutsText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.textMuted },
   chainHeader: {
-    flexDirection: "row",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: Colors.bgCardElevated,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    flexDirection: "row", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.glassBorder,
   },
-  chainHeaderCell: {
-    flex: 1,
-    fontSize: 9,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
-    textAlign: "right",
-  },
-  chainRow: {
-    flexDirection: "row",
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  chainRowAtm: {
-    backgroundColor: Colors.blueDim,
-  },
-  chainRowItm: {
-    backgroundColor: "rgba(30,40,60,0.5)",
-  },
-  chainCell: {
-    flex: 1,
-    fontSize: 12,
-    fontFamily: "Inter_500Medium",
-    color: Colors.textPrimary,
-    textAlign: "right",
-  },
+  chainHeaderCell: { flex: 1, fontSize: 10, fontFamily: "Inter_600SemiBold", color: Colors.textMuted, textAlign: "center", textTransform: "uppercase", letterSpacing: 0.3 },
+  chainRow: { flexDirection: "row", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.glassBorder },
+  chainRowAtm: { backgroundColor: Colors.accentDim },
+  chainRowItm: { backgroundColor: Colors.glass },
+  chainCell: { flex: 1, fontSize: 12, fontFamily: "Inter_500Medium", color: Colors.textSecondary, textAlign: "center" },
   pcrCard: {
-    backgroundColor: Colors.bgCard,
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 14,
+    backgroundColor: Colors.glassElevated, borderRadius: 16, padding: 16, gap: 12,
+    borderWidth: 1, borderColor: Colors.glassBorder,
   },
-  pcrHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  pcrTitle: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.textPrimary,
-  },
-  pcrStats: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
-  pcrStat: {
-    gap: 3,
-    minWidth: 60,
-  },
-  pcrStatLabel: {
-    fontSize: 9,
-    color: Colors.textMuted,
-    fontFamily: "Inter_500Medium",
-    letterSpacing: 0.5,
-  },
-  pcrStatValue: {
-    fontSize: 16,
-    fontFamily: "Inter_700Bold",
-    color: Colors.textPrimary,
-  },
-  pcrStatHint: {
-    fontSize: 10,
-    fontFamily: "Inter_500Medium",
-    color: Colors.textSecondary,
-  },
+  pcrHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  pcrTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: Colors.textPrimary },
+  pcrStats: { flexDirection: "row", justifyContent: "space-between" },
+  pcrStat: { alignItems: "center", gap: 2 },
+  pcrStatLabel: { fontSize: 9, fontFamily: "Inter_500Medium", color: Colors.textMuted, letterSpacing: 0.5 },
+  pcrStatValue: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  pcrStatHint: { fontSize: 10, fontFamily: "Inter_500Medium", color: Colors.textSecondary },
   pcrBarContainer: {
-    flexDirection: "row",
-    height: 8,
-    borderRadius: 4,
-    overflow: "hidden",
-    gap: 2,
+    flexDirection: "row", height: 8, borderRadius: 4, overflow: "hidden",
+    backgroundColor: Colors.glass,
   },
-  pcrBarCall: {
-    backgroundColor: Colors.accent,
-    borderRadius: 4,
-  },
-  pcrBarPut: {
-    backgroundColor: Colors.red,
-    borderRadius: 4,
-  },
-  pcrBarLabels: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  pcrBarLabel: {
-    fontSize: 10,
-    fontFamily: "Inter_500Medium",
-  },
-  flowSectionTitle: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.textPrimary,
-    marginTop: 4,
-  },
+  pcrBarCall: { backgroundColor: Colors.accent, borderTopLeftRadius: 4, borderBottomLeftRadius: 4 },
+  pcrBarPut: { backgroundColor: Colors.red, borderTopRightRadius: 4, borderBottomRightRadius: 4 },
+  pcrBarLabels: { flexDirection: "row", justifyContent: "space-between" },
+  pcrBarLabel: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  flowSectionTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: Colors.textPrimary, marginTop: 12, marginBottom: 8 },
   flowHeader: {
-    flexDirection: "row",
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    backgroundColor: Colors.bgCardElevated,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    flexDirection: "row", alignItems: "center", paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: Colors.glassBorder,
   },
-  flowHeaderCell: {
-    flex: 1,
-    fontSize: 9,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
-    textAlign: "center",
-  },
+  flowHeaderCell: { flex: 1, fontSize: 10, fontFamily: "Inter_600SemiBold", color: Colors.textMuted, textAlign: "center", textTransform: "uppercase", letterSpacing: 0.3 },
   flowRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    flexDirection: "row", alignItems: "center", paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: Colors.glassBorder,
   },
-  flowTypeBadge: {
-    width: 44,
-    borderRadius: 5,
-    paddingVertical: 3,
-    alignItems: "center",
-  },
-  flowTypeText: {
-    fontSize: 10,
-    fontFamily: "Inter_700Bold",
-  },
-  flowCell: {
-    flex: 1,
-    fontSize: 12,
-    fontFamily: "Inter_500Medium",
-    color: Colors.textPrimary,
-    textAlign: "center",
-  },
+  flowTypeBadge: { width: 48, paddingVertical: 3, borderRadius: 4, alignItems: "center" },
+  flowTypeText: { fontSize: 10, fontFamily: "Inter_700Bold" },
+  flowCell: { flex: 1, fontSize: 12, fontFamily: "Inter_500Medium", color: Colors.textSecondary, textAlign: "center" },
 });

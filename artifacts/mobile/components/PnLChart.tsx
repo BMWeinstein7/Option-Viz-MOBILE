@@ -33,9 +33,9 @@ interface PnLChartProps {
 const PAD = { top: 20, bottom: 40, left: 60, right: 20 };
 
 const TIME_COLORS = [
-  "rgba(59, 130, 246, 0.6)",
-  "rgba(139, 92, 246, 0.6)",
-  "rgba(245, 158, 11, 0.6)",
+  "rgba(56, 189, 248, 0.5)",
+  "rgba(167, 139, 250, 0.5)",
+  "rgba(251, 191, 36, 0.5)",
 ];
 
 export function PnLChart({
@@ -131,12 +131,12 @@ export function PnLChart({
       <Svg width={width} height={height}>
         <Defs>
           <LinearGradient id="profitGrad" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={Colors.accent} stopOpacity="0.35" />
-            <Stop offset="1" stopColor={Colors.accent} stopOpacity="0.05" />
+            <Stop offset="0" stopColor={Colors.accent} stopOpacity="0.25" />
+            <Stop offset="1" stopColor={Colors.accent} stopOpacity="0.02" />
           </LinearGradient>
           <LinearGradient id="lossGrad" x1="0" y1="1" x2="0" y2="0">
-            <Stop offset="0" stopColor={Colors.red} stopOpacity="0.35" />
-            <Stop offset="1" stopColor={Colors.red} stopOpacity="0.05" />
+            <Stop offset="0" stopColor={Colors.red} stopOpacity="0.25" />
+            <Stop offset="1" stopColor={Colors.red} stopOpacity="0.02" />
           </LinearGradient>
         </Defs>
 
@@ -148,7 +148,7 @@ export function PnLChart({
           y1={zeroY}
           x2={PAD.left + chartW}
           y2={zeroY}
-          stroke={Colors.borderLight}
+          stroke="rgba(255,255,255,0.08)"
           strokeWidth={1}
           strokeDasharray="4,4"
         />
@@ -161,6 +161,7 @@ export function PnLChart({
           stroke={Colors.blue}
           strokeWidth={1}
           strokeDasharray="3,3"
+          opacity={0.6}
         />
 
         {breakEvenPoints.map((be, i) => {
@@ -199,10 +200,11 @@ export function PnLChart({
           <Path
             d={pathD}
             fill="none"
-            stroke="#e8edf5"
-            strokeWidth={2.5}
+            stroke={Colors.textPrimary}
+            strokeWidth={2}
             strokeLinejoin="round"
             strokeLinecap="round"
+            opacity={0.9}
           />
         ) : null}
 
@@ -214,6 +216,7 @@ export function PnLChart({
             fontSize={9}
             fill={v >= 0 ? Colors.accent : Colors.red}
             textAnchor="end"
+            opacity={0.8}
           >
             {fmt(v)}
           </SvgText>
@@ -258,8 +261,9 @@ export function PnLChart({
             x={width - PAD.right - 2}
             y={PAD.top + 12 + timeDecayCurves.length * 14}
             fontSize={8}
-            fill="#e8edf5"
+            fill={Colors.textPrimary}
             textAnchor="end"
+            opacity={0.7}
           >
             At Expiry
           </SvgText>
