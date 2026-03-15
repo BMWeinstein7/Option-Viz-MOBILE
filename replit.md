@@ -40,9 +40,9 @@ artifacts-monorepo/
 
 - **Repo**: https://github.com/BMWeinstein7/Option-Viz-MOBILE
 - **Branch**: master
-- **Release**: v2.1.0
+- **Release**: v2.2.0
 
-### Release Notes — v2.1.0
+### Release Notes — v2.2.0
 
 #### New Features
 - **Performance Tab** — dedicated 4th tab showing total realized P&L, trade count (open/closed), win rate %, average gain/loss, and top 5 winners/losers ranked by both dollar P&L and percentage return. Includes "Export PDF" button that generates a comprehensive print-friendly PDF report (white background, OptionViz branding, stats grid, top winners/losers, all open positions, all closed trades with entry/exit/P&L) via expo-print + expo-file-system (v55) for proper naming + expo-sharing for native share sheet.
