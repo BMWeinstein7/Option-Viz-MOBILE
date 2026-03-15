@@ -1,15 +1,18 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: OptionViz API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: market
+    description: Market data operations
+  - name: strategies
+    description: Strategy management
 paths:
   /healthz:
     get:
@@ -24,6 +27,108 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /market/quote/{ticker}:
+    get:
+      operationId: getStockQuote
+      tags: [market]
+      summary: Get stock quote
+      description: Returns live stock price and basic info
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stock quote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockQuote"
+        "404":
+          description: Ticker not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /market/expirations/{ticker}:
+    get:
+      operationId: getOptionExpirations
+      tags: [market]
+      summary: Get available option expiration dates
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of expiration dates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpirationsResponse"
+        "404":
+          description: Ticker not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /market/chain/{ticker}/{expiration}:
+    get:
+      operationId: getOptionsChain
+      tags: [market]
+      summary: Get options chain for a ticker and expiration
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: expiration
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Options chain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OptionsChain"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /strategy/analyze:
+    post:
+      operationId: analyzeStrategy
+      tags: [strategies]
+      summary: Analyze a multi-leg options strategy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeStrategyRequest"
+      responses:
+        "200":
+          description: Strategy analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StrategyAnalysis"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +138,214 @@ components:
           type: string
       required:
         - status
-
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+        - message
+    StockQuote:
+      type: object
+      properties:
+        ticker:
+          type: string
+        price:
+          type: number
+        change:
+          type: number
+        changePercent:
+          type: number
+        volume:
+          type: integer
+        high:
+          type: number
+        low:
+          type: number
+        open:
+          type: number
+        previousClose:
+          type: number
+        name:
+          type: string
+      required:
+        - ticker
+        - price
+        - change
+        - changePercent
+        - volume
+        - high
+        - low
+        - open
+        - previousClose
+        - name
+    ExpirationsResponse:
+      type: object
+      properties:
+        ticker:
+          type: string
+        expirations:
+          type: array
+          items:
+            type: string
+      required:
+        - ticker
+        - expirations
+    OptionContract:
+      type: object
+      properties:
+        strike:
+          type: number
+        lastPrice:
+          type: number
+        bid:
+          type: number
+        ask:
+          type: number
+        volume:
+          type: integer
+        openInterest:
+          type: integer
+        impliedVolatility:
+          type: number
+        delta:
+          type: number
+        gamma:
+          type: number
+        theta:
+          type: number
+        vega:
+          type: number
+      required:
+        - strike
+        - lastPrice
+        - bid
+        - ask
+        - volume
+        - openInterest
+        - impliedVolatility
+    OptionsChain:
+      type: object
+      properties:
+        ticker:
+          type: string
+        expiration:
+          type: string
+        spotPrice:
+          type: number
+        calls:
+          type: array
+          items:
+            $ref: "#/components/schemas/OptionContract"
+        puts:
+          type: array
+          items:
+            $ref: "#/components/schemas/OptionContract"
+      required:
+        - ticker
+        - expiration
+        - spotPrice
+        - calls
+        - puts
+    StrategyLeg:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [buy, sell]
+        type:
+          type: string
+          enum: [call, put]
+        strike:
+          type: number
+        premium:
+          type: number
+        quantity:
+          type: integer
+        expiration:
+          type: string
+      required:
+        - action
+        - type
+        - strike
+        - premium
+        - quantity
+        - expiration
+    AnalyzeStrategyRequest:
+      type: object
+      properties:
+        ticker:
+          type: string
+        spotPrice:
+          type: number
+        riskFreeRate:
+          type: number
+        legs:
+          type: array
+          items:
+            $ref: "#/components/schemas/StrategyLeg"
+      required:
+        - ticker
+        - spotPrice
+        - legs
+    PnLPoint:
+      type: object
+      properties:
+        price:
+          type: number
+        pnl:
+          type: number
+      required:
+        - price
+        - pnl
+    Greeks:
+      type: object
+      properties:
+        delta:
+          type: number
+        gamma:
+          type: number
+        theta:
+          type: number
+        vega:
+          type: number
+        rho:
+          type: number
+      required:
+        - delta
+        - gamma
+        - theta
+        - vega
+        - rho
+    StrategyAnalysis:
+      type: object
+      properties:
+        pnlAtExpiry:
+          type: array
+          items:
+            $ref: "#/components/schemas/PnLPoint"
+        greeks:
+          $ref: "#/components/schemas/Greeks"
+        maxProfit:
+          type: number
+          nullable: true
+        maxLoss:
+          type: number
+          nullable: true
+        breakEvenPoints:
+          type: array
+          items:
+            type: number
+        netCost:
+          type: number
+        riskRewardRatio:
+          type: number
+          nullable: true
+      required:
+        - pnlAtExpiry
+        - greeks
+        - breakEvenPoints
+        - netCost
