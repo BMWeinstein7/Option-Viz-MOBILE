@@ -13,7 +13,7 @@ pnpm workspace monorepo using TypeScript. Contains an Expo React Native mobile a
 - **API framework**: Express 5
 - **Mobile**: Expo React Native (SDK 53)
 - **Database**: PostgreSQL + Drizzle ORM
-- **Auth**: Session-based (express-session + connect-pg-simple + bcryptjs)
+- **Auth**: Replit Auth (OpenID Connect with PKCE via openid-client v6)
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **Build**: esbuild (CJS bundle)
 
@@ -63,7 +63,7 @@ artifacts-monorepo/
 - **Editable contract sizes** — +/- quantity controls on each leg with inline stepper
 - **SSE streaming market data** — real-time price updates for any US stock ticker
 - Full options chain with flow analysis and put/call ratio
-- **User authentication** — welcome screen with Create Account / Sign In / Continue as Guest
+- **User authentication** — OIDC login via Replit Auth; welcome screen with Log In / Continue as Guest
 - **Server-side strategy persistence** — saved strategies synced to PostgreSQL for logged-in users
 - **Profile menu** — hamburger-style drawer with user stats, preferences, sign-out
 - **Trade tracking with live P&L** — open trades show unrealized P&L computed from current live midpoints
@@ -78,8 +78,11 @@ artifacts-monorepo/
 
 ### Auth Flow
 - Welcome screen shows first (AuthScreen component)
-- Options: Create Account, Sign In, Continue as Guest
-- Session-based auth via express-session + connect-pg-simple
+- Options: Log In (OIDC redirect), Continue as Guest
+- Replit Auth via OpenID Connect with PKCE (openid-client v6)
+- Mobile: expo-auth-session opens OIDC provider, exchanges code via POST /api/mobile-auth/token-exchange, stores session token in expo-secure-store
+- Web: cookie-based session with httpOnly secure cookies
+- authMiddleware loads user from session on every request, patches req.isAuthenticated()
 - Guest mode uses AsyncStorage for local strategy persistence
 - Logged-in mode syncs strategies to server
 
@@ -119,10 +122,12 @@ interface TradeLeg {
 - `GET /api/market/pcr/:ticker` — put/call ratio
 - `GET /api/market/stream/:ticker` — SSE streaming quotes
 - `POST /api/strategy/analyze` — strategy P&L analysis with time-decay curves
-- `POST /api/auth/register` — create account
-- `POST /api/auth/login` — sign in
-- `GET /api/auth/me` — session check
-- `POST /api/auth/logout` — sign out
+- `GET /api/auth/user` — get current authenticated user
+- `GET /api/login` — start OIDC login flow (302 redirect)
+- `GET /api/callback` — OIDC callback (302 redirect)
+- `GET /api/logout` — clear session + OIDC logout (302 redirect)
+- `POST /api/mobile-auth/token-exchange` — exchange mobile OIDC code for session token
+- `POST /api/mobile-auth/logout` — delete mobile session
 - `GET /api/strategies` — list user strategies
 - `POST /api/strategies` — save strategy
 - `DELETE /api/strategies/:id` — delete strategy
@@ -131,10 +136,13 @@ interface TradeLeg {
 - `api-server/src/lib/marketData.ts` — market data generation (any ticker via hash-based fallback)
 - `api-server/src/routes/market.ts` — all market endpoints
 - `api-server/src/routes/strategy.ts` — Black-Scholes strategy analysis
-- `api-server/src/routes/auth.ts` — authentication routes
+- `api-server/src/routes/auth.ts` — OIDC auth routes (login, callback, logout, mobile token exchange)
+- `api-server/src/lib/auth.ts` — session CRUD, OIDC config, user upsert
+- `api-server/src/middlewares/authMiddleware.ts` — loads user from session, patches req.isAuthenticated()
 - `api-server/src/routes/strategies.ts` — strategy CRUD routes
-- `api-server/src/app.ts` — Express app with session middleware + CORS
-- `mobile/components/AuthScreen.tsx` — welcome / login / register screen
+- `api-server/src/app.ts` — Express app with cookie-parser + authMiddleware + CORS
+- `mobile/lib/auth.tsx` — AuthProvider with expo-auth-session OIDC + SecureStore token
+- `mobile/components/AuthScreen.tsx` — welcome screen with Log In button (no forms)
 - `mobile/components/ProfileMenu.tsx` — hamburger profile drawer
 - `mobile/components/PnLChart.tsx` — SVG P&L chart with time-decay overlays
 - `mobile/components/LegRow.tsx` — leg display with live bid/ask/mid + editable quantity
@@ -177,7 +185,7 @@ Expo React Native app (OptionViz).
 
 ### `lib/db` (`@workspace/db`)
 
-Database layer using Drizzle ORM with PostgreSQL. Tables: users, saved_strategies, session.
+Database layer using Drizzle ORM with PostgreSQL. Tables: users (varchar id, email, firstName, lastName, profileImageUrl), sessions (sid, sess, expire), saved_strategies.
 
 ### `lib/api-spec` (`@workspace/api-spec`)
 

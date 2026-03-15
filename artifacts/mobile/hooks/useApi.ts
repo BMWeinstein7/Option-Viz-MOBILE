@@ -1,14 +1,22 @@
+import * as SecureStore from "expo-secure-store";
+
+const AUTH_TOKEN_KEY = "auth_session_token";
 const BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}/api`;
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${BASE}${path}`;
+  const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY).catch(() => null);
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options?.headers as Record<string, string>),
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
   const res = await fetch(url, {
     ...options,
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
+    headers,
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -119,9 +127,11 @@ export interface PutCallRatio {
 }
 
 export interface AuthUser {
-  id: number;
-  username: string;
-  displayName?: string;
+  id: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  profileImageUrl: string | null;
 }
 
 export interface ServerStrategy {
@@ -168,24 +178,6 @@ export const api = {
     }),
 
   getStreamUrl: (ticker: string) => `${BASE}/market/stream/${ticker}`,
-
-  register: (username: string, password: string, displayName?: string) =>
-    apiFetch<AuthUser>("/auth/register", {
-      method: "POST",
-      body: JSON.stringify({ username, password, displayName }),
-    }),
-
-  login: (username: string, password: string) =>
-    apiFetch<AuthUser>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ username, password }),
-    }),
-
-  logout: () =>
-    apiFetch<{ success: boolean }>("/auth/logout", { method: "POST" }),
-
-  getMe: () =>
-    apiFetch<{ authenticated: boolean; id?: number; username?: string }>("/auth/me"),
 
   getStrategies: () => apiFetch<ServerStrategy[]>("/strategies"),
 

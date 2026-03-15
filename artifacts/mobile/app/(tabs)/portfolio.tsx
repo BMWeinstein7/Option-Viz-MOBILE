@@ -17,6 +17,7 @@ import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { useAppContext, SavedStrategy, OpenTrade, TradeLeg } from "@/context/AppContext";
+import { Analytics, AnalyticsEvents } from "@/lib/analytics";
 import { api, OptionsChain } from "@/hooks/useApi";
 import { LegRow } from "@/components/LegRow";
 import { PnLChart } from "@/components/PnLChart";
@@ -217,8 +218,29 @@ function StrategyCard({
           </View>
         </View>
         <View style={styles.strategyHeaderRight}>
-          <Pressable onPress={() => Alert.alert("Delete Strategy", "Are you sure?", [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: onDelete }])} hitSlop={8}>
-            <Feather name="trash-2" size={16} color={Colors.textMuted} />
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation();
+              Alert.alert(
+                "Delete Strategy",
+                `Remove "${strategy.name}" on ${strategy.ticker}? This cannot be undone.`,
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: () => {
+                      onDelete();
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    },
+                  },
+                ]
+              );
+            }}
+            hitSlop={12}
+            style={styles.deleteStratBtn}
+          >
+            <Feather name="trash-2" size={16} color={Colors.red} />
           </Pressable>
           <Feather name={expanded ? "chevron-up" : "chevron-down"} size={18} color={Colors.textMuted} />
         </View>
@@ -264,6 +286,7 @@ function TradeCard({ trade, onDelete }: { trade: OpenTrade; onDelete: () => void
   const [editModal, setEditModal] = useState(false);
   const [exitInput, setExitInput] = useState("");
   const [editEntry, setEditEntry] = useState(String(trade.entryNetCost));
+  const [editLegs, setEditLegs] = useState<TradeLeg[]>(trade.legs || []);
   const [editNotes, setEditNotes] = useState("");
   const { closeTrade, updateTrade, deleteTrade } = useAppContext();
 
@@ -286,13 +309,57 @@ function TradeCard({ trade, onDelete }: { trade: OpenTrade; onDelete: () => void
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [currentValue, trade.id, closeTrade]);
 
+  const handleEditLegQty = useCallback((index: number, delta: number) => {
+    setEditLegs((prev) => {
+      const updated = [...prev];
+      const newQty = Math.max(1, updated[index].quantity + delta);
+      updated[index] = { ...updated[index], quantity: newQty };
+      const newCost = updated.reduce((sum, tl) => {
+        const cost = tl.entryMid * tl.quantity * 100;
+        return sum + (tl.action === "buy" ? cost : -cost);
+      }, 0);
+      setEditEntry(String(Math.round(newCost * 100) / 100));
+      return updated;
+    });
+  }, []);
+
+  const handleEditLegQtyDirect = useCallback((index: number, value: string) => {
+    const parsed = parseInt(value, 10);
+    if (value === "") {
+      setEditLegs((prev) => {
+        const updated = [...prev];
+        updated[index] = { ...updated[index], quantity: 1 };
+        return updated;
+      });
+      return;
+    }
+    if (isNaN(parsed) || parsed < 1) return;
+    setEditLegs((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], quantity: parsed };
+      const newCost = updated.reduce((sum, tl) => {
+        const cost = tl.entryMid * tl.quantity * 100;
+        return sum + (tl.action === "buy" ? cost : -cost);
+      }, 0);
+      setEditEntry(String(Math.round(newCost * 100) / 100));
+      return updated;
+    });
+  }, []);
+
   const handleEdit = useCallback(async () => {
     const entry = parseFloat(editEntry);
     if (isNaN(entry)) return;
-    await updateTrade(trade.id, { entryNetCost: entry });
+    await updateTrade(trade.id, { entryNetCost: entry, legs: editLegs });
+    Analytics.track(AnalyticsEvents.TRADE_EDIT_SAVED, {
+      trade_id: trade.id,
+      strategy_name: trade.strategyName,
+      ticker: trade.ticker,
+      new_entry_cost: entry,
+      leg_quantities: editLegs.map((l) => l.quantity),
+    });
     setEditModal(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [editEntry, trade.id, updateTrade]);
+  }, [editEntry, editLegs, trade.id, trade.strategyName, trade.ticker, updateTrade]);
 
   return (
     <View style={styles.tradeCard}>
@@ -399,7 +466,7 @@ function TradeCard({ trade, onDelete }: { trade: OpenTrade; onDelete: () => void
           <View style={styles.tradeActions}>
             {isOpen && (
               <>
-                <Pressable style={styles.editTradeBtn} onPress={() => setEditModal(true)}>
+                <Pressable style={styles.editTradeBtn} onPress={() => { setEditLegs([...trade.legs]); setEditEntry(String(trade.entryNetCost)); setEditModal(true); }}>
                   <Feather name="edit-2" size={14} color={Colors.textSecondary} />
                   <Text style={styles.editTradeBtnText}>Edit</Text>
                 </Pressable>
@@ -442,10 +509,38 @@ function TradeCard({ trade, onDelete }: { trade: OpenTrade; onDelete: () => void
 
       <Modal visible={editModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end" }} keyboardShouldPersistTaps="handled">
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Edit Trade</Text>
-            <Text style={styles.modalSub}>Adjust your entry cost</Text>
+            <Text style={styles.modalSub}>Adjust contracts per leg and entry cost</Text>
             <View style={{ gap: 12 }}>
+              {editLegs.map((leg, i) => (
+                <View key={`edit-leg-${i}`} style={styles.editLegRow}>
+                  <View style={styles.editLegInfo}>
+                    <View style={[styles.miniActionBadge, { backgroundColor: leg.action === "buy" ? Colors.accentDim : Colors.redDim }]}>
+                      <Text style={[styles.miniActionText, { color: leg.action === "buy" ? Colors.accent : Colors.red }]}>{leg.action.toUpperCase()}</Text>
+                    </View>
+                    <View style={[styles.miniTypeBadge, { backgroundColor: leg.type === "call" ? Colors.blueDim : Colors.purpleDim }]}>
+                      <Text style={[styles.miniTypeText, { color: leg.type === "call" ? Colors.blue : Colors.purple }]}>{leg.type.toUpperCase()}</Text>
+                    </View>
+                    <Text style={styles.editLegStrike}>${leg.strike}</Text>
+                  </View>
+                  <View style={styles.editQtyControls}>
+                    <Pressable style={styles.editQtyBtn} onPress={() => handleEditLegQty(i, -1)}>
+                      <Feather name="minus" size={14} color={Colors.textSecondary} />
+                    </Pressable>
+                    <TextInput
+                      style={styles.editQtyInput}
+                      keyboardType="numeric"
+                      value={String(leg.quantity)}
+                      onChangeText={(v) => handleEditLegQtyDirect(i, v)}
+                    />
+                    <Pressable style={styles.editQtyBtn} onPress={() => handleEditLegQty(i, 1)}>
+                      <Feather name="plus" size={14} color={Colors.textSecondary} />
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
               <View>
                 <Text style={styles.editLabel}>Entry Net Cost</Text>
                 <TextInput style={styles.modalInput} keyboardType="numeric" value={editEntry} onChangeText={setEditEntry} />
@@ -460,6 +555,7 @@ function TradeCard({ trade, onDelete }: { trade: OpenTrade; onDelete: () => void
               </Pressable>
             </View>
           </View>
+          </ScrollView>
         </View>
       </Modal>
     </View>
@@ -540,7 +636,7 @@ export default function PortfolioScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Portfolio</Text>
-          {user && <Text style={styles.headerSub}>@{user.username}</Text>}
+          {user && <Text style={styles.headerSub}>{user.email || [user.firstName, user.lastName].filter(Boolean).join(" ") || ""}</Text>}
         </View>
         <ProfileButton />
       </View>
@@ -656,6 +752,7 @@ const styles = StyleSheet.create({
   strategyHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 14 },
   strategyHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
   strategyHeaderRight: { flexDirection: "row", alignItems: "center", gap: 12 },
+  deleteStratBtn: { padding: 6, borderRadius: 8, backgroundColor: Colors.redDim },
   tickerBadge: { backgroundColor: Colors.accentDim, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: Colors.accent + "25" },
   tickerBadgeText: { fontSize: 12, fontFamily: "Inter_700Bold", color: Colors.accent },
   strategyName: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: Colors.textPrimary },
@@ -702,6 +799,12 @@ const styles = StyleSheet.create({
   closeTradeBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: Colors.redDim, borderRadius: 10, borderWidth: 1, borderColor: Colors.red + "20" },
   closeTradeBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: Colors.red },
   deleteTradeBtn: { paddingVertical: 10, paddingHorizontal: 10, backgroundColor: Colors.glass, borderRadius: 10, borderWidth: 1, borderColor: Colors.glassBorder, justifyContent: "center" },
+  editLegRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: Colors.glassElevated, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: Colors.glassBorder },
+  editLegInfo: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
+  editLegStrike: { fontSize: 13, fontFamily: "Inter_700Bold", color: Colors.textPrimary },
+  editQtyControls: { flexDirection: "row", alignItems: "center", gap: 4 },
+  editQtyBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.glass, borderWidth: 1, borderColor: Colors.glassBorder, alignItems: "center", justifyContent: "center" },
+  editQtyInput: { width: 44, height: 32, borderRadius: 8, backgroundColor: Colors.glass, borderWidth: 1, borderColor: Colors.glassBorder, textAlign: "center", color: Colors.textPrimary, fontFamily: "Inter_600SemiBold", fontSize: 14 },
   editLabel: { fontSize: 12, fontFamily: "Inter_500Medium", color: Colors.textSecondary, marginBottom: 4 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
   modalContent: { backgroundColor: Colors.bgCard, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 16, borderWidth: 1, borderColor: Colors.glassBorder, paddingBottom: 40 },

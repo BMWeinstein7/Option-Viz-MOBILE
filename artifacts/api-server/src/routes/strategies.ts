@@ -1,26 +1,20 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { savedStrategiesTable } from "@workspace/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 
 const router = Router();
 
-function requireAuth(req: any, res: any, next: any) {
-  const userId = req.session?.userId;
-  if (!userId) {
+router.get("/strategies", async (req, res) => {
+  if (!req.isAuthenticated()) {
     res.status(401).json({ error: "Authentication required" });
     return;
   }
-  next();
-}
-
-router.get("/strategies", requireAuth, async (req, res) => {
   try {
-    const userId = (req.session as any).userId;
     const strategies = await db
       .select()
       .from(savedStrategiesTable)
-      .where(eq(savedStrategiesTable.userId, userId))
+      .where(eq(savedStrategiesTable.userId, req.user.id))
       .orderBy(desc(savedStrategiesTable.createdAt));
 
     res.json(strategies.map((s) => ({
@@ -38,9 +32,12 @@ router.get("/strategies", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/strategies", requireAuth, async (req, res) => {
+router.post("/strategies", async (req, res) => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
   try {
-    const userId = (req.session as any).userId;
     const { name, ticker, spotPrice, legs } = req.body;
 
     if (!name || !ticker || !spotPrice || !legs) {
@@ -49,7 +46,7 @@ router.post("/strategies", requireAuth, async (req, res) => {
     }
 
     const [strategy] = await db.insert(savedStrategiesTable).values({
-      userId,
+      userId: req.user.id,
       name,
       ticker,
       spotPrice: String(spotPrice),
@@ -71,17 +68,20 @@ router.post("/strategies", requireAuth, async (req, res) => {
   }
 });
 
-router.delete("/strategies/:id", requireAuth, async (req, res) => {
+router.delete("/strategies/:id", async (req, res) => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
   try {
-    const userId = (req.session as any).userId;
     const id = parseInt(req.params.id);
 
     const [existing] = await db
       .select()
       .from(savedStrategiesTable)
-      .where(eq(savedStrategiesTable.id, id));
+      .where(and(eq(savedStrategiesTable.id, id), eq(savedStrategiesTable.userId, req.user.id)));
 
-    if (!existing || existing.userId !== userId) {
+    if (!existing) {
       res.status(404).json({ error: "Strategy not found" });
       return;
     }
