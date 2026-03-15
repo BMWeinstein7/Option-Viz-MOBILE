@@ -7,10 +7,19 @@
  */
 
 export * from "./analyzeStrategyRequest";
+export * from "./authorizationSessionHeaderParameter";
+export * from "./authUser";
+export * from "./authUserEnvelope";
+export * from "./beginBrowserLoginParams";
+export * from "./errorEnvelope";
 export * from "./errorResponse";
 export * from "./expirationsResponse";
 export * from "./greeks";
+export * from "./handleBrowserLoginCallbackParams";
 export * from "./healthStatus";
+export * from "./logoutSuccess";
+export * from "./mobileTokenExchangeRequest";
+export * from "./mobileTokenExchangeSuccess";
 export * from "./optionContract";
 export * from "./optionsChain";
 export * from "./pnLPoint";

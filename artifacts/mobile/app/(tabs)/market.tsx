@@ -18,6 +18,7 @@ import { Colors } from "@/constants/colors";
 import { POPULAR_TICKERS } from "@/constants/strategies";
 import { api, OptionsChain, StockQuote, FlowEntry, PutCallRatio } from "@/hooks/useApi";
 import { ProfileButton } from "@/components/ProfileMenu";
+import { Analytics, AnalyticsEvents } from "@/lib/analytics";
 
 type MarketView = "quotes" | "chain" | "flow";
 

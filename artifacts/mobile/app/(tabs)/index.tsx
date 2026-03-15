@@ -23,6 +23,7 @@ import { LegRow, Leg } from "@/components/LegRow";
 import { GreeksBar } from "@/components/GreeksBar";
 import { ProfileButton } from "@/components/ProfileMenu";
 import { useAppContext, TradeLeg } from "@/context/AppContext";
+import { Analytics, AnalyticsEvents } from "@/lib/analytics";
 
 type BuilderStep = "ticker" | "template" | "legs" | "analysis";
 
@@ -36,7 +37,7 @@ function findClosestContract(contracts: OptionContract[], strike: number): Optio
 
 export default function BuilderScreen() {
   const insets = useSafeAreaInsets();
-  const { saveStrategy, openTrade } = useAppContext();
+  const { saveStrategy, openTrade, savedStrategies } = useAppContext();
 
   const [step, setStep] = useState<BuilderStep>("ticker");
   const [ticker, setTicker] = useState("");
@@ -257,17 +258,64 @@ export default function BuilderScreen() {
 
   const handleSave = useCallback(async () => {
     if (!analysis || !quote) return;
-    await saveStrategy({
-      name: selectedTemplateId
-        ? STRATEGY_TEMPLATES.find((t) => t.id === selectedTemplateId)?.name ?? "Custom"
-        : "Custom Strategy",
-      ticker,
-      spotPrice: quote.price,
-      legs,
-    });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert("Saved!", "Strategy saved to your portfolio.");
-  }, [analysis, quote, ticker, legs, selectedTemplateId, saveStrategy]);
+
+    const strategyName = selectedTemplateId
+      ? STRATEGY_TEMPLATES.find((t) => t.id === selectedTemplateId)?.name ?? "Custom"
+      : "Custom Strategy";
+
+    const legSignature = legs
+      .map((l) => `${l.action}-${l.type}-${l.strike}-${l.expiration}`)
+      .sort()
+      .join("|");
+
+    const duplicateCount = savedStrategies.filter((s) => {
+      if (s.ticker !== ticker || s.name !== strategyName) return false;
+      const existingSig = s.legs
+        .map((l) => `${l.action}-${l.type}-${l.strike}-${l.expiration}`)
+        .sort()
+        .join("|");
+      return existingSig === legSignature;
+    }).length;
+
+    const doSave = async () => {
+      await saveStrategy({
+        name: strategyName,
+        ticker,
+        spotPrice: quote!.price,
+        legs,
+      });
+      Analytics.track(AnalyticsEvents.BUILDER_STRATEGY_SAVED, {
+        strategy_name: strategyName,
+        ticker,
+        leg_count: legs.length,
+        duplicate_count: duplicateCount,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Saved!", "Strategy saved to your portfolio.");
+    };
+
+    if (duplicateCount >= 3) {
+      Alert.alert(
+        "Duplicate Strategy",
+        `You already have ${duplicateCount} identical "${strategyName}" strategies saved for ${ticker}. Save another copy?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Save Anyway", onPress: doSave },
+        ]
+      );
+    } else if (duplicateCount > 0) {
+      Alert.alert(
+        "Similar Strategy Exists",
+        `You have ${duplicateCount} matching "${strategyName}" saved for ${ticker}. Save another copy?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Save", onPress: doSave },
+        ]
+      );
+    } else {
+      await doSave();
+    }
+  }, [analysis, quote, ticker, legs, selectedTemplateId, saveStrategy, savedStrategies]);
 
   const handleOpenTrade = useCallback(async () => {
     if (!quote) return;
@@ -286,16 +334,24 @@ export default function BuilderScreen() {
       return sum + (tl.action === "buy" ? cost : -cost);
     }, 0);
 
+    const tradeName = selectedTemplateId
+      ? STRATEGY_TEMPLATES.find((t) => t.id === selectedTemplateId)?.name ?? "Custom"
+      : "Custom Strategy";
     await openTrade({
       strategyId: selectedTemplateId || "custom",
-      strategyName: selectedTemplateId
-        ? STRATEGY_TEMPLATES.find((t) => t.id === selectedTemplateId)?.name ?? "Custom"
-        : "Custom Strategy",
+      strategyName: tradeName,
       ticker,
       openedAt: Date.now(),
       entryNetCost: Math.round(entryNetCost * 100) / 100,
       entrySpotPrice: quote.price,
       legs: tradeLegs,
+    });
+    Analytics.track(AnalyticsEvents.BUILDER_TRADE_OPENED, {
+      strategy_name: tradeName,
+      ticker,
+      leg_count: legs.length,
+      entry_net_cost: Math.round(entryNetCost * 100) / 100,
+      total_contracts: legs.reduce((s, l) => s + l.quantity, 0),
     });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Alert.alert("Trade Opened!", `Entry cost: $${Math.abs(entryNetCost).toFixed(0)} ${entryNetCost >= 0 ? "debit" : "credit"}`);

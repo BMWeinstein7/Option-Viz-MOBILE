@@ -1,39 +1,16 @@
 import express, { type Express } from "express";
 import cors from "cors";
-import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
-import { pool } from "@workspace/db";
+import cookieParser from "cookie-parser";
+import { authMiddleware } from "./middlewares/authMiddleware";
 import router from "./routes";
-
-const PgSession = connectPgSimple(session);
 
 const app: Express = express();
 
-app.use(cors({
-  origin: true,
-  credentials: true,
-}));
+app.use(cors({ credentials: true, origin: true }));
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-app.use(
-  session({
-    store: new PgSession({
-      pool: pool as any,
-      tableName: "session",
-      createTableIfMissing: true,
-    }),
-    secret: process.env.SESSION_SECRET || "optionviz-secret-key-change-in-prod",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-      httpOnly: true,
-      secure: false,
-      sameSite: "lax",
-    },
-  })
-);
+app.use(authMiddleware);
 
 app.use("/api", router);
 

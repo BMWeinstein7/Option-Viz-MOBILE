@@ -15,6 +15,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Colors } from "@/constants/colors";
 import { useAppContext, OpenTrade } from "@/context/AppContext";
+import { Analytics, AnalyticsEvents } from "@/lib/analytics";
 
 interface TradeWithPercent extends OpenTrade {
   pctReturn: number;

@@ -6,6 +6,7 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import { useAuth } from "@/lib/auth";
 import { api, AuthUser, ServerStrategy } from "@/hooks/useApi";
 
 export interface SavedLeg {
@@ -58,8 +59,7 @@ export interface OpenTrade {
 interface AppContextType {
   user: AuthUser | null;
   isAuthLoading: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string) => Promise<void>;
+  login: () => Promise<void>;
   logout: () => Promise<void>;
   savedStrategies: SavedStrategy[];
   openTrades: OpenTrade[];
@@ -80,24 +80,18 @@ const STRATEGIES_KEY = "optionviz_strategies";
 const TRADES_KEY = "optionviz_trades";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const { user: authUser, isLoading: isAuthLoading, login: authLogin, logout: authLogout } = useAuth();
   const [savedStrategies, setSavedStrategies] = useState<SavedStrategy[]>([]);
   const [openTrades, setOpenTrades] = useState<OpenTrade[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const meData = await api.getMe();
-        if (meData.authenticated && meData.id && meData.username) {
-          setUser({ id: meData.id, username: meData.username });
-        }
-      } catch {}
-      setIsAuthLoading(false);
-    };
-    init();
-  }, []);
+  const user: AuthUser | null = authUser ? {
+    id: authUser.id,
+    email: authUser.email,
+    firstName: authUser.firstName,
+    lastName: authUser.lastName,
+    profileImageUrl: authUser.profileImageUrl,
+  } : null;
 
   useEffect(() => {
     const load = async () => {
@@ -141,21 +135,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     refreshStrategies();
   }, [user, refreshStrategies]);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const u = await api.login(username, password);
-    setUser(u);
-  }, []);
-
-  const register = useCallback(async (username: string, password: string) => {
-    const u = await api.register(username, password);
-    setUser(u);
-  }, []);
+  const login = useCallback(async () => {
+    await authLogin();
+  }, [authLogin]);
 
   const logout = useCallback(async () => {
-    try { await api.logout(); } catch {}
-    setUser(null);
+    await authLogout();
     setSavedStrategies([]);
-  }, []);
+  }, [authLogout]);
 
   const persistTrades = useCallback(async (trades: OpenTrade[]) => {
     await AsyncStorage.setItem(TRADES_KEY, JSON.stringify(trades));
@@ -270,7 +257,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         user,
         isAuthLoading,
         login,
-        register,
         logout,
         savedStrategies,
         openTrades,

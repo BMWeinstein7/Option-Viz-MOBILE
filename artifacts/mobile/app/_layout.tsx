@@ -15,8 +15,11 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { AuthProvider, useAuth } from "@/lib/auth";
 import { AppProvider, useAppContext } from "@/context/AppContext";
+import { AnalyticsProvider } from "@/context/AnalyticsProvider";
 import { AuthScreen } from "@/components/AuthScreen";
+import { Analytics, AnalyticsEvents } from "@/lib/analytics";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -30,17 +33,39 @@ const queryClient = new QueryClient({
 });
 
 function AuthGate() {
-  const { user, isAuthLoading, login, register } = useAppContext();
+  const { user, isLoading, login } = useAuth();
   const [isGuest, setIsGuest] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
 
-  if (isAuthLoading) return null;
+  useEffect(() => {
+    if (!isLoading && user) {
+      Analytics.identify(user.id, { auth_method: "oidc" });
+    }
+  }, [user, isLoading]);
+
+  if (isLoading) return null;
 
   if (!user && !isGuest) {
+    Analytics.track(AnalyticsEvents.AUTH_SCREEN_VIEWED);
     return (
       <AuthScreen
-        onLogin={login}
-        onRegister={register}
-        onGuest={() => setIsGuest(true)}
+        onLogin={async () => {
+          Analytics.track(AnalyticsEvents.AUTH_LOGIN_STARTED);
+          setLoginLoading(true);
+          try {
+            await login();
+            Analytics.track(AnalyticsEvents.AUTH_LOGIN_SUCCESS);
+          } catch (e) {
+            Analytics.track(AnalyticsEvents.AUTH_LOGIN_FAILED, { error: String(e) });
+          } finally {
+            setLoginLoading(false);
+          }
+        }}
+        onGuest={() => {
+          Analytics.track(AnalyticsEvents.AUTH_GUEST_MODE);
+          setIsGuest(true);
+        }}
+        isLoading={loginLoading}
       />
     );
   }
@@ -72,15 +97,19 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <StatusBar style="light" />
       <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <AppProvider>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <KeyboardProvider>
-                <AuthGate />
-              </KeyboardProvider>
-            </GestureHandlerRootView>
-          </AppProvider>
-        </QueryClientProvider>
+        <AnalyticsProvider>
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+              <AppProvider>
+                <GestureHandlerRootView style={{ flex: 1 }}>
+                  <KeyboardProvider>
+                    <AuthGate />
+                  </KeyboardProvider>
+                </GestureHandlerRootView>
+              </AppProvider>
+            </AuthProvider>
+          </QueryClientProvider>
+        </AnalyticsProvider>
       </ErrorBoundary>
     </SafeAreaProvider>
   );

@@ -1,27 +1,46 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
   Modal,
-  TextInput,
   Alert,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { Colors } from "@/constants/colors";
 import { useAppContext } from "@/context/AppContext";
 
+function getUserInitial(user: { firstName?: string | null; lastName?: string | null; email?: string | null } | null): string {
+  if (!user) return "G";
+  if (user.firstName) return user.firstName[0].toUpperCase();
+  if (user.email) return user.email[0].toUpperCase();
+  return "U";
+}
+
+function getUserDisplayName(user: { firstName?: string | null; lastName?: string | null; email?: string | null } | null): string {
+  if (!user) return "Guest";
+  const parts = [user.firstName, user.lastName].filter(Boolean);
+  if (parts.length > 0) return parts.join(" ");
+  if (user.email) return user.email;
+  return "User";
+}
+
+function getUserHandle(user: { email?: string | null } | null): string {
+  if (!user) return "Not signed in";
+  return user.email || "Signed in";
+}
+
 export function ProfileButton() {
   const { user } = useAppContext();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = React.useState(false);
 
   return (
     <>
       <Pressable style={styles.avatarBtn} onPress={() => setMenuOpen(true)}>
         {user ? (
           <Text style={styles.avatarText}>
-            {(user.username || "U")[0].toUpperCase()}
+            {getUserInitial(user)}
           </Text>
         ) : (
           <Feather name="user" size={16} color={Colors.textSecondary} />
@@ -34,8 +53,6 @@ export function ProfileButton() {
 
 function ProfileDrawer({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { user, logout, savedStrategies, openTrades } = useAppContext();
-  const [editMode, setEditMode] = useState(false);
-  const [displayName, setDisplayName] = useState(user?.displayName || user?.username || "");
 
   const handleLogout = async () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -65,36 +82,17 @@ function ProfileDrawer({ visible, onClose }: { visible: boolean; onClose: () => 
         <View style={styles.profileSection}>
           <View style={styles.profileAvatar}>
             <Text style={styles.profileAvatarText}>
-              {user ? (user.username || "U")[0].toUpperCase() : "G"}
+              {getUserInitial(user)}
             </Text>
           </View>
           <View style={styles.profileInfo}>
-            {editMode ? (
-              <TextInput
-                style={styles.editInput}
-                value={displayName}
-                onChangeText={setDisplayName}
-                placeholder="Display name"
-                placeholderTextColor={Colors.textMuted}
-                autoFocus
-                onBlur={() => setEditMode(false)}
-              />
-            ) : (
-              <Pressable onPress={() => user && setEditMode(true)}>
-                <Text style={styles.profileName}>
-                  {user ? (user.displayName || user.username) : "Guest"}
-                </Text>
-              </Pressable>
-            )}
+            <Text style={styles.profileName}>
+              {getUserDisplayName(user)}
+            </Text>
             <Text style={styles.profileHandle}>
-              {user ? `@${user.username}` : "Not signed in"}
+              {getUserHandle(user)}
             </Text>
           </View>
-          {user && (
-            <Pressable style={styles.editBtn} onPress={() => setEditMode(!editMode)}>
-              <Feather name="edit-2" size={14} color={Colors.textMuted} />
-            </Pressable>
-          )}
         </View>
 
         <View style={styles.statsRow}>
@@ -219,17 +217,6 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: Colors.textMuted,
     marginTop: 2,
-  },
-  editBtn: {
-    padding: 8,
-  },
-  editInput: {
-    fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.textPrimary,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.accent,
-    paddingBottom: 4,
   },
   statsRow: {
     flexDirection: "row",
