@@ -13,7 +13,7 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import { Paths, File as ExpoFile } from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import { Colors } from "@/constants/colors";
 import { useAppContext, OpenTrade } from "@/context/AppContext";
 import { Analytics, AnalyticsEvents } from "@/lib/analytics";
@@ -464,10 +464,9 @@ export default function PerformanceScreen() {
       let shareUri = uri;
       let copySucceeded = false;
       try {
-        const destFile = new ExpoFile(Paths.document, fileName);
-        const srcFile = new ExpoFile(uri);
-        srcFile.copy(destFile);
-        shareUri = destFile.uri;
+        const destUri = `${FileSystem.documentDirectory}${fileName}`;
+        await FileSystem.copyAsync({ from: uri, to: destUri });
+        shareUri = destUri;
         copySucceeded = true;
       } catch {
         shareUri = uri;
@@ -490,8 +489,7 @@ export default function PerformanceScreen() {
 
       try {
         if (copySucceeded) {
-          const tempFile = new ExpoFile(uri);
-          tempFile.delete();
+          await FileSystem.deleteAsync(uri, { idempotent: true });
         }
       } catch {}
     } catch (e: unknown) {
