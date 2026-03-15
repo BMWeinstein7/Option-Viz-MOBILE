@@ -82,10 +82,14 @@ def run_single_query(
         # programmatic subprocess usage is safe.
         env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
 
+        # cmd is a list (not a shell string) and shell=False (default), so the
+        # OS executes it directly via execv — no shell interpolation occurs and
+        # variable arguments cannot be used for command injection.
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            shell=False,
             cwd=project_root,
             env=env,
         )
