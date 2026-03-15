@@ -40,11 +40,11 @@ artifacts-monorepo/
 
 - **Repo**: https://github.com/BMWeinstein7/Option-Viz-MOBILE
 - **Branch**: master
-- **Release**: v1.1.0
+- **Release**: v2.0.0
 
 ## OptionViz Mobile App
 
-### Features (v1.1)
+### Features (v2.0)
 - 12+ strategy templates (Long Call/Put, spreads, income, volatility, neutral, hedging)
 - **Custom strategy builder** — add/remove individual legs freely, not just templates
 - P&L charts with time-decay curves (75%/50%/25% DTE) via per-leg Black-Scholes
