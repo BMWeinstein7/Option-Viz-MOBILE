@@ -13,6 +13,7 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import { Paths, File as ExpoFile } from "expo-file-system";
 import { Colors } from "@/constants/colors";
 import { useAppContext, OpenTrade } from "@/context/AppContext";
 import { Analytics, AnalyticsEvents } from "@/lib/analytics";
@@ -174,17 +175,28 @@ function TopTradesSection({
   );
 }
 
-function buildPdfHtml(data: ReturnType<typeof usePerformanceData>) {
+function escHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function buildPdfHtml(
+  data: ReturnType<typeof usePerformanceData>,
+  allTrades: OpenTrade[]
+) {
   const tradeRowsHtml = (trades: TradeWithPercent[]) =>
     trades
       .map(
         (t, i) => `
       <tr>
-        <td style="padding:6px 8px;border-bottom:1px solid #2a2a3a;color:#8B8B9E;">${i + 1}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #2a2a3a;font-weight:600;color:#EAEAF0;">${t.ticker}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #2a2a3a;color:#8B8B9E;">${t.strategyName}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #2a2a3a;font-weight:700;color:${(t.realizedPnL ?? 0) >= 0 ? "#0ABAB5" : "#F43F5E"};">${fmtDollar(t.realizedPnL ?? 0)}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #2a2a3a;color:${t.pctReturn >= 0 ? "#0ABAB5" : "#F43F5E"};">${fmtPct(t.pctReturn)}</td>
+        <td>${i + 1}</td>
+        <td class="bold">${escHtml(t.ticker)}</td>
+        <td>${escHtml(t.strategyName)}</td>
+        <td class="bold ${(t.realizedPnL ?? 0) >= 0 ? "green" : "red"}">${fmtDollar(t.realizedPnL ?? 0)}</td>
+        <td class="${t.pctReturn >= 0 ? "green" : "red"}">${fmtPct(t.pctReturn)}</td>
       </tr>`
       )
       .join("");
@@ -192,73 +204,240 @@ function buildPdfHtml(data: ReturnType<typeof usePerformanceData>) {
   const tableBlock = (title: string, trades: TradeWithPercent[]) => {
     if (trades.length === 0) return "";
     return `
-      <h3 style="color:#EAEAF0;font-size:14px;margin:20px 0 8px;">${title}</h3>
-      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <h3>${title}</h3>
+      <table>
         <thead>
-          <tr style="border-bottom:2px solid #2a2a3a;">
-            <th style="padding:6px 8px;text-align:left;color:#4A4A5E;">#</th>
-            <th style="padding:6px 8px;text-align:left;color:#4A4A5E;">Ticker</th>
-            <th style="padding:6px 8px;text-align:left;color:#4A4A5E;">Strategy</th>
-            <th style="padding:6px 8px;text-align:left;color:#4A4A5E;">P&amp;L</th>
-            <th style="padding:6px 8px;text-align:left;color:#4A4A5E;">Return</th>
+          <tr>
+            <th>#</th>
+            <th>Ticker</th>
+            <th>Strategy</th>
+            <th>P&amp;L</th>
+            <th>Return</th>
           </tr>
         </thead>
         <tbody>${tradeRowsHtml(trades)}</tbody>
       </table>`;
   };
 
-  return `
-    <html>
-    <head>
-      <meta charset="utf-8" />
-      <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0D0D12; color: #EAEAF0; padding: 32px; margin: 0; }
-        .header { text-align: center; margin-bottom: 24px; }
-        .header h1 { font-size: 22px; margin: 0 0 4px; color: #EAEAF0; }
-        .header p { font-size: 12px; color: #8B8B9E; margin: 0; }
-        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
-        .stat-box { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px; text-align: center; }
-        .stat-label { font-size: 9px; color: #4A4A5E; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-        .stat-value { font-size: 18px; font-weight: 700; }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <h1>Trade Performance Report</h1>
-        <p>Generated ${new Date().toLocaleDateString()}</p>
-      </div>
-      <div class="stats-grid">
-        <div class="stat-box">
-          <div class="stat-label">Total P&amp;L</div>
-          <div class="stat-value" style="color:${data.totalRealizedPnL >= 0 ? "#0ABAB5" : "#F43F5E"}">${fmtDollar(data.totalRealizedPnL)}</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Closed Trades</div>
-          <div class="stat-value" style="color:#EAEAF0">${data.closedCount}</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Open Trades</div>
-          <div class="stat-value" style="color:#EAEAF0">${data.openCount}</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Win Rate</div>
-          <div class="stat-value" style="color:${data.winRate >= 50 ? "#0ABAB5" : "#F43F5E"}">${data.winRate.toFixed(0)}%</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Avg Gain</div>
-          <div class="stat-value" style="color:#0ABAB5">${data.avgGain > 0 ? fmtDollar(data.avgGain) : "—"}</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Avg Loss</div>
-          <div class="stat-value" style="color:#F43F5E">${data.avgLoss < 0 ? fmtDollar(data.avgLoss) : "—"}</div>
-        </div>
-      </div>
-      ${tableBlock("Top Winners (by $)", data.topByDollarGain)}
-      ${tableBlock("Top Losers (by $)", data.topByDollarLoss)}
-      ${tableBlock("Top Winners (by %)", data.topByPctGain)}
-      ${tableBlock("Top Losers (by %)", data.topByPctLoss)}
-    </body>
-    </html>`;
+  const openTrades = allTrades.filter((t) => t.status === "open");
+  const openTradesHtml =
+    openTrades.length > 0
+      ? `
+      <h3>Open Positions (${openTrades.length})</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Ticker</th>
+            <th>Strategy</th>
+            <th>Entry Cost</th>
+            <th>Opened</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${openTrades
+            .map(
+              (t, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td class="bold">${escHtml(t.ticker)}</td>
+              <td>${escHtml(t.strategyName)}</td>
+              <td>$${Math.abs(t.entryNetCost).toFixed(0)}</td>
+              <td>${new Date(t.openedAt).toLocaleDateString()}</td>
+            </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>`
+      : "";
+
+  const closedTrades = allTrades.filter((t) => t.status === "closed");
+  const allClosedHtml =
+    closedTrades.length > 0
+      ? `
+      <h3>All Closed Trades (${closedTrades.length})</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Ticker</th>
+            <th>Strategy</th>
+            <th>Entry</th>
+            <th>Exit</th>
+            <th>P&amp;L</th>
+            <th>Closed</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${closedTrades
+            .map(
+              (t, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td class="bold">${escHtml(t.ticker)}</td>
+              <td>${escHtml(t.strategyName)}</td>
+              <td>$${Math.abs(t.entryNetCost).toFixed(0)}</td>
+              <td>$${(t.exitValue ?? 0).toFixed(0)}</td>
+              <td class="bold ${(t.realizedPnL ?? 0) >= 0 ? "green" : "red"}">${fmtDollar(t.realizedPnL ?? 0)}</td>
+              <td>${t.closedAt ? new Date(t.closedAt).toLocaleDateString() : "—"}</td>
+            </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>`
+      : "";
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Roboto, sans-serif;
+      background: #ffffff;
+      color: #1a1a2e;
+      padding: 28px 32px;
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #0ABAB5;
+    }
+    .header h1 {
+      font-size: 24px;
+      margin: 0 0 2px;
+      color: #1a1a2e;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    .header .subtitle {
+      font-size: 11px;
+      color: #666;
+      margin: 0;
+    }
+    .header .brand {
+      font-size: 13px;
+      color: #0ABAB5;
+      font-weight: 600;
+      margin: 0 0 2px;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .stat-box {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 8px;
+      padding: 12px 10px;
+      text-align: center;
+    }
+    .stat-label {
+      font-size: 8px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+    .stat-value {
+      font-size: 18px;
+      font-weight: 700;
+    }
+    h3 {
+      font-size: 13px;
+      margin: 22px 0 8px;
+      color: #1a1a2e;
+      font-weight: 700;
+      border-bottom: 1px solid #e9ecef;
+      padding-bottom: 6px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      margin-bottom: 8px;
+    }
+    thead tr {
+      border-bottom: 2px solid #dee2e6;
+    }
+    th {
+      padding: 6px 8px;
+      text-align: left;
+      color: #666;
+      font-weight: 600;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    td {
+      padding: 5px 8px;
+      border-bottom: 1px solid #f0f0f0;
+      color: #333;
+    }
+    .bold { font-weight: 700; }
+    .green { color: #0a8f8b; }
+    .red { color: #d63384; }
+    .footer {
+      margin-top: 30px;
+      padding-top: 12px;
+      border-top: 1px solid #e9ecef;
+      text-align: center;
+      font-size: 9px;
+      color: #aaa;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <p class="brand">OptionViz</p>
+    <h1>Trade Performance Report</h1>
+    <p class="subtitle">Generated ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-box">
+      <div class="stat-label">Total Realized P&amp;L</div>
+      <div class="stat-value ${data.totalRealizedPnL >= 0 ? "green" : "red"}">${fmtDollar(data.totalRealizedPnL)}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Closed Trades</div>
+      <div class="stat-value">${data.closedCount}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Open Trades</div>
+      <div class="stat-value">${data.openCount}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Win Rate</div>
+      <div class="stat-value ${data.winRate >= 50 ? "green" : "red"}">${data.winRate.toFixed(1)}%</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Avg Gain</div>
+      <div class="stat-value green">${data.avgGain > 0 ? fmtDollar(data.avgGain) : "—"}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Avg Loss</div>
+      <div class="stat-value red">${data.avgLoss < 0 ? fmtDollar(data.avgLoss) : "—"}</div>
+    </div>
+  </div>
+  ${tableBlock("Top Winners (by $)", data.topByDollarGain)}
+  ${tableBlock("Top Losers (by $)", data.topByDollarLoss)}
+  ${tableBlock("Top Winners (by %)", data.topByPctGain)}
+  ${tableBlock("Top Losers (by %)", data.topByPctLoss)}
+  ${openTradesHtml}
+  ${allClosedHtml}
+  <div class="footer">
+    OptionViz &mdash; Options Strategy Builder &amp; Visualizer &mdash; This report is for informational purposes only.
+  </div>
+</body>
+</html>`;
 }
 
 export default function PerformanceScreen() {
@@ -270,24 +449,58 @@ export default function PerformanceScreen() {
   const handleExportPdf = useCallback(async () => {
     setExporting(true);
     try {
-      const html = buildPdfHtml(data);
-      const { uri } = await Print.printToFileAsync({ html });
+      const html = buildPdfHtml(data, openTrades);
+      const { uri } = await Print.printToFileAsync({
+        html,
+        width: 612,
+        height: 792,
+      });
+
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0, 10);
+      const timeStr = now.toISOString().slice(11, 19).replace(/:/g, "");
+      const fileName = `OptionViz_Performance_Report_${dateStr}_${timeStr}.pdf`;
+
+      let shareUri = uri;
+      let copySucceeded = false;
+      try {
+        const destFile = new ExpoFile(Paths.document, fileName);
+        const srcFile = new ExpoFile(uri);
+        srcFile.copy(destFile);
+        shareUri = destFile.uri;
+        copySucceeded = true;
+      } catch {
+        shareUri = uri;
+      }
+
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
+        await Sharing.shareAsync(shareUri, {
           mimeType: "application/pdf",
-          dialogTitle: "Share Performance Report",
+          dialogTitle: "Save Performance Report",
           UTI: "com.adobe.pdf",
         });
+      } else if (copySucceeded) {
+        Alert.alert(
+          "PDF Generated",
+          `Your report "${fileName}" has been saved.`,
+        );
       } else {
-        Alert.alert("PDF Saved", `Report saved to: ${uri}`);
+        Alert.alert("PDF Generated", "Report saved to a temporary location.");
       }
+
+      try {
+        if (copySucceeded) {
+          const tempFile = new ExpoFile(uri);
+          tempFile.delete();
+        }
+      } catch {}
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Could not generate PDF";
       Alert.alert("Export Failed", message);
     } finally {
       setExporting(false);
     }
-  }, [data]);
+  }, [data, openTrades]);
 
   const hasClosedTrades = data.closedCount > 0;
 
