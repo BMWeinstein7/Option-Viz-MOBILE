@@ -23,6 +23,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "briefcase", selected: "briefcase.fill" }} />
         <Label>Portfolio</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="performance">
+        <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
+        <Label>Performance</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -90,6 +94,18 @@ function ClassicTabLayout() {
               <SymbolView name="briefcase" tintColor={color} size={22} />
             ) : (
               <Feather name="briefcase" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="performance"
+        options={{
+          title: "Performance",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="chart.bar" tintColor={color} size={22} />
+            ) : (
+              <Feather name="bar-chart-2" size={22} color={color} />
             ),
         }}
       />

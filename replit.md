@@ -46,6 +46,7 @@ artifacts-monorepo/
 
 ### Features (v2.0)
 - 12+ strategy templates (Long Call/Put, spreads, income, volatility, neutral, hedging)
+- **Performance dashboard** — dedicated 4th tab showing total P&L, win rate, avg gain/loss, top trades ranked by $ and %, with PDF export via expo-print + expo-sharing
 - **Custom strategy builder** — add/remove individual legs freely, not just templates
 - P&L charts with time-decay curves (75%/50%/25% DTE) via per-leg Black-Scholes
 - Greeks visualization (Delta, Gamma, Theta, Vega)
