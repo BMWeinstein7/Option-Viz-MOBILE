@@ -27,6 +27,7 @@ export interface StockQuote {
   open: number;
   previousClose: number;
   name: string;
+  marketCap?: number;
 }
 
 export interface OptionContract {
@@ -37,6 +38,7 @@ export interface OptionContract {
   volume: number;
   openInterest: number;
   impliedVolatility: number;
+  inTheMoney: boolean;
   delta?: number;
   gamma?: number;
   theta?: number;
@@ -56,6 +58,12 @@ export interface PnLPoint {
   pnl: number;
 }
 
+export interface TimeDecayCurve {
+  dte: number;
+  label: string;
+  data: PnLPoint[];
+}
+
 export interface Greeks {
   delta: number;
   gamma: number;
@@ -66,6 +74,7 @@ export interface Greeks {
 
 export interface StrategyAnalysis {
   pnlAtExpiry: PnLPoint[];
+  timeDecayCurves: TimeDecayCurve[];
   greeks: Greeks;
   maxProfit: number | null;
   maxLoss: number | null;
@@ -83,20 +92,63 @@ export interface StrategyLegRequest {
   expiration: string;
 }
 
+export interface FlowEntry {
+  ticker: string;
+  expiration: string;
+  strike: number;
+  type: "CALL" | "PUT";
+  bid: number;
+  ask: number;
+  last: number;
+  volume: number;
+  openInterest: number;
+  volOiRatio: number;
+  iv: number;
+  inTheMoney: boolean;
+}
+
+export interface PutCallRatio {
+  ticker: string;
+  volRatio: number;
+  oiRatio: number;
+  totalCallVol: number;
+  totalPutVol: number;
+  totalCallOI: number;
+  totalPutOI: number;
+}
+
 export const api = {
   getQuote: (ticker: string) => apiFetch<StockQuote>(`/market/quote/${ticker}`),
+
+  getBatchQuotes: (tickers: string[]) =>
+    apiFetch<{ quotes: StockQuote[] }>("/market/batch-quotes", {
+      method: "POST",
+      body: JSON.stringify({ tickers }),
+    }),
+
   getExpirations: (ticker: string) =>
     apiFetch<{ ticker: string; expirations: string[] }>(`/market/expirations/${ticker}`),
+
   getChain: (ticker: string, expiration: string) =>
     apiFetch<OptionsChain>(`/market/chain/${ticker}/${expiration}`),
+
+  getFlow: (ticker: string) =>
+    apiFetch<{ ticker: string; flow: FlowEntry[] }>(`/market/flow/${ticker}`),
+
+  getPutCallRatio: (ticker: string) =>
+    apiFetch<PutCallRatio>(`/market/pcr/${ticker}`),
+
   analyzeStrategy: (payload: {
     ticker: string;
     spotPrice: number;
     riskFreeRate?: number;
+    impliedVol?: number;
     legs: StrategyLegRequest[];
   }) =>
     apiFetch<StrategyAnalysis>("/strategy/analyze", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+
+  getStreamUrl: (ticker: string) => `${BASE}/market/stream/${ticker}`,
 };
