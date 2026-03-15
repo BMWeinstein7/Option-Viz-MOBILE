@@ -40,16 +40,49 @@ artifacts-monorepo/
 
 - **Repo**: https://github.com/BMWeinstein7/Option-Viz-MOBILE
 - **Branch**: master
-- **Release**: v2.2.0
+- **Release**: v3.0.0
 
-### Release Notes — v2.2.0
+### Release Notes — v3.0.0
 
-#### New Features
-- **Performance Tab** — dedicated 4th tab showing total realized P&L, trade count (open/closed), win rate %, average gain/loss, and top 5 winners/losers ranked by both dollar P&L and percentage return. Includes "Export PDF" button that generates a comprehensive print-friendly PDF report (white background, OptionViz branding, stats grid, top winners/losers, all open positions, all closed trades with entry/exit/P&L) via expo-print + expo-file-system (v55) for proper naming + expo-sharing for native share sheet.
+#### Full-Featured Options Strategy Platform
+- **12+ strategy templates** — Long Call/Put, Bull/Bear Call & Put Spreads, Iron Condor, Iron Butterfly, Straddle, Strangle, Covered Call, Protective Put, Collar, Calendar Spread, and more
+- **Custom strategy builder** — add/remove individual option legs freely beyond templates
+- **P&L charts with time-decay curves** — 75%/50%/25% DTE overlays via per-leg Black-Scholes pricing
+- **Greeks visualization** — Delta, Gamma, Theta, Vega displayed per-leg and net
+- **Live midpoint pricing** — each leg shows live bid/ask/mid from options chain, auto-updated every 5 seconds
+- **Editable contract sizes** — +/- quantity controls on each leg with inline stepper
+- **SSE streaming market data** — real-time price updates for any US stock ticker
 
-#### Fixes & Improvements
-- **Post-merge script** — fixed timeout caused by interactive `drizzle-kit push` prompt; now uses `push-force` for non-interactive merge runs.
-- **Security hardening** — explicitly set `shell=False` on subprocess calls in eval tooling to clarify intent and suppress static analysis false positives.
+#### Trade Tracking & Portfolio Management
+- **Open/close trades** — open trades directly from the builder with live midpoints as entry prices; close at current live prices
+- **Live unrealized P&L** — open trades compute unrealized P&L from current live midpoints in real-time
+- **Trade editing** — edit entry costs, close at live prices, delete trades
+- **Portfolio dashboard** — summary view with Saved Strategies and Trades sub-tabs (open/closed)
+
+#### Performance Analytics & PDF Export
+- **Performance tab** — dedicated 4th tab showing total realized P&L, trade count (open/closed), win rate %, average gain/loss, and top 5 winners/losers ranked by both dollar P&L and percentage return
+- **Comprehensive PDF reports** — Export PDF generates a professionally styled, print-friendly report with OptionViz branding, stats grid, top winners/losers tables, open positions, all closed trades with entry/exit/P&L, and disclaimer footer
+- **Proper file naming** — PDFs saved as `OptionViz_Performance_Report_YYYY-MM-DD_HHMMSS.pdf` with unique timestamps
+- **File lifecycle management** — temp files cleaned up after export; robust error handling with user-facing fallback messages
+
+#### Authentication & Cloud Sync
+- **Replit Auth (OIDC with PKCE)** — secure login via OpenID Connect using openid-client v6; no custom login forms
+- **Mobile auth flow** — expo-auth-session opens OIDC provider, exchanges authorization code via token exchange endpoint, stores session token in expo-secure-store
+- **Web session management** — cookie-based sessions with httpOnly secure cookies
+- **Server-side strategy persistence** — saved strategies synced to PostgreSQL for logged-in users
+- **Guest mode** — full functionality with local AsyncStorage persistence (no account required)
+- **Profile menu** — hamburger-style drawer with user stats, preferences, and sign-out
+
+#### Market Data
+- **Live Quotes** — real-time streaming stock quotes via SSE
+- **Options Chain** — full calls/puts chain for any ticker and expiration
+- **Options Flow** — flow analysis with put/call ratio visualization
+
+#### Infrastructure & Stability
+- **Expo SDK 54 compatibility** — all packages aligned to SDK-compatible versions (expo-file-system ~19.0.21, react-native-keyboard-controller 1.18.5)
+- **HTML safety** — user-controlled strings (tickers, strategy names) HTML-escaped in PDF generation
+- **Post-merge script hardening** — non-interactive `push-force` for automated merge runs
+- **Liquid Glass design system** — dark grey #0D0D12 + Tiffany blue #0ABAB5 glassmorphic UI throughout
 
 ## OptionViz Mobile App
 
