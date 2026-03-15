@@ -4,6 +4,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${BASE}${path}`;
   const res = await fetch(url, {
     ...options,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...options?.headers,
@@ -11,7 +12,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body?.message || `HTTP ${res.status}`);
+    throw new Error(body?.error || body?.message || `HTTP ${res.status}`);
   }
   return res.json() as Promise<T>;
 }
@@ -117,6 +118,22 @@ export interface PutCallRatio {
   totalPutOI: number;
 }
 
+export interface AuthUser {
+  id: number;
+  username: string;
+  displayName?: string;
+}
+
+export interface ServerStrategy {
+  id: number;
+  name: string;
+  ticker: string;
+  spotPrice: number;
+  legs: any[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const api = {
   getQuote: (ticker: string) => apiFetch<StockQuote>(`/market/quote/${ticker}`),
 
@@ -151,4 +168,33 @@ export const api = {
     }),
 
   getStreamUrl: (ticker: string) => `${BASE}/market/stream/${ticker}`,
+
+  register: (username: string, password: string, displayName?: string) =>
+    apiFetch<AuthUser>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ username, password, displayName }),
+    }),
+
+  login: (username: string, password: string) =>
+    apiFetch<AuthUser>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
+
+  logout: () =>
+    apiFetch<{ success: boolean }>("/auth/logout", { method: "POST" }),
+
+  getMe: () =>
+    apiFetch<{ authenticated: boolean; id?: number; username?: string }>("/auth/me"),
+
+  getStrategies: () => apiFetch<ServerStrategy[]>("/strategies"),
+
+  saveServerStrategy: (payload: { name: string; ticker: string; spotPrice: number; legs: any[] }) =>
+    apiFetch<ServerStrategy>("/strategies", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  deleteServerStrategy: (id: number) =>
+    apiFetch<{ success: boolean }>(`/strategies/${id}`, { method: "DELETE" }),
 };

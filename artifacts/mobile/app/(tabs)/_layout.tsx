@@ -3,9 +3,9 @@ import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import React from "react";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { Colors } from "@/constants/colors";
 
 function NativeTabLayout() {
@@ -41,7 +41,7 @@ function ClassicTabLayout() {
           position: "absolute",
           backgroundColor: isIOS ? "transparent" : Colors.bg,
           borderTopWidth: 1,
-          borderTopColor: Colors.border,
+          borderTopColor: Colors.glassBorder,
           elevation: 0,
           ...(isWeb ? { height: 84 } : {}),
         },
