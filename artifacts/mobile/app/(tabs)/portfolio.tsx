@@ -54,6 +54,11 @@ function useLivePnL(trade: OpenTrade) {
   let currentValue = 0;
   const updatedLegs = trade.legs.map((tl) => {
     const contracts = tl.type === "call" ? chain.calls : chain.puts;
+    if (!contracts || contracts.length === 0) {
+      const legValue = tl.entryMid * tl.quantity * 100;
+      currentValue += tl.action === "buy" ? legValue : -legValue;
+      return { ...tl, currentMid: tl.entryMid, currentBid: tl.entryBid, currentAsk: tl.entryAsk };
+    }
     const match = contracts.reduce(
       (best, c) => (Math.abs(c.strike - tl.strike) < Math.abs(best.strike - tl.strike) ? c : best),
       contracts[0]
