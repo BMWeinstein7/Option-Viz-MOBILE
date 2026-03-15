@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -45,6 +45,8 @@ export default function BuilderScreen() {
     queryKey: ["quote", ticker],
     queryFn: () => api.getQuote(ticker),
     enabled: !!ticker,
+    refetchInterval: 5000,
+    staleTime: 3000,
   });
 
   const {
@@ -87,7 +89,7 @@ export default function BuilderScreen() {
 
   const handleTickerSelect = useCallback((t: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setTicker(t);
+    setTicker(t.toUpperCase());
     setStep("template");
   }, []);
 
@@ -106,15 +108,14 @@ export default function BuilderScreen() {
       setSelectedTemplateId(templateId);
 
       const expiration = expirationsData?.expirations[1] || "";
-      const step = quote.price < 50 ? 1 : quote.price < 200 ? 5 : quote.price < 500 ? 10 : 25;
+      const step = quote.price < 10 ? 0.5 : quote.price < 50 ? 1 : quote.price < 200 ? 5 : quote.price < 500 ? 10 : 25;
       const atm = Math.round(quote.price / step) * step;
 
       const newLegs: Leg[] = template.legs.map((tl, i) => {
         const rawStrike = atm + tl.strikeOffset;
         const strike = Math.round(rawStrike / step) * step;
 
-        // Estimate premium from chain data
-        let premium = tl.type === "call" ? quote.price * 0.03 : quote.price * 0.03;
+        let premium = quote.price * 0.03;
         if (chain) {
           const contracts = tl.type === "call" ? chain.calls : chain.puts;
           const closest = contracts.reduce(
@@ -132,7 +133,7 @@ export default function BuilderScreen() {
           strike,
           premium: Math.round(premium * 100) / 100,
           quantity: tl.quantity,
-          expiration: expiration || "2025-06-20",
+          expiration: expiration || "2026-06-19",
         };
       });
 
@@ -186,7 +187,6 @@ export default function BuilderScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) }]}>
-      {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Strategy Builder</Text>
@@ -201,7 +201,6 @@ export default function BuilderScreen() {
         ) : null}
       </View>
 
-      {/* Step indicator */}
       <View style={styles.stepRow}>
         {(["ticker", "template", "legs", "analysis"] as BuilderStep[]).map((s, i) => (
           <View
@@ -220,15 +219,15 @@ export default function BuilderScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* STEP 1: Ticker */}
         {step === "ticker" && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Choose a Stock</Text>
+            <Text style={styles.sectionTitle}>Choose Any Stock</Text>
+            <Text style={styles.sectionHint}>Enter any US ticker symbol</Text>
 
             <View style={styles.searchRow}>
               <TextInput
                 style={styles.input}
-                placeholder="Enter ticker (e.g. AAPL)"
+                placeholder="Enter ticker (e.g. AAPL, TSLA, ANY)"
                 placeholderTextColor={Colors.textMuted}
                 value={tickerInput}
                 onChangeText={(t) => setTickerInput(t.toUpperCase())}
@@ -243,7 +242,7 @@ export default function BuilderScreen() {
 
             <Text style={styles.sectionLabel}>Popular</Text>
             <View style={styles.tickerGrid}>
-              {POPULAR_TICKERS.map((t) => (
+              {POPULAR_TICKERS.slice(0, 30).map((t) => (
                 <Pressable
                   key={t}
                   style={({ pressed }) => [
@@ -259,7 +258,6 @@ export default function BuilderScreen() {
           </View>
         )}
 
-        {/* STEP 2: Strategy Template */}
         {step === "template" && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Select Strategy</Text>
@@ -267,7 +265,6 @@ export default function BuilderScreen() {
               <ActivityIndicator color={Colors.accent} style={{ marginTop: 40 }} />
             ) : (
               <>
-                {/* Quote card */}
                 {quote && (
                   <View style={styles.quoteCard}>
                     <View>
@@ -334,7 +331,6 @@ export default function BuilderScreen() {
           </View>
         )}
 
-        {/* STEP 3: Legs Review */}
         {step === "legs" && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Review Legs</Text>
@@ -403,7 +399,6 @@ export default function BuilderScreen() {
           </View>
         )}
 
-        {/* STEP 4: Analysis */}
         {step === "analysis" && analysis && quote && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>P&L Analysis</Text>
@@ -413,9 +408,14 @@ export default function BuilderScreen() {
                 data={analysis.pnlAtExpiry}
                 spotPrice={quote.price}
                 breakEvenPoints={analysis.breakEvenPoints}
-                height={220}
+                height={240}
+                timeDecayCurves={analysis.timeDecayCurves}
               />
               <View style={styles.chartLegend}>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: "#e8edf5" }]} />
+                  <Text style={styles.legendText}>At Expiry</Text>
+                </View>
                 <View style={styles.legendItem}>
                   <View style={[styles.legendDot, { backgroundColor: Colors.blue }]} />
                   <Text style={styles.legendText}>Current ${quote.price.toFixed(2)}</Text>
@@ -425,6 +425,18 @@ export default function BuilderScreen() {
                   <Text style={styles.legendText}>Break-even</Text>
                 </View>
               </View>
+              {analysis.timeDecayCurves && analysis.timeDecayCurves.length > 0 && (
+                <View style={styles.chartLegend}>
+                  {analysis.timeDecayCurves.map((curve, i) => (
+                    <View key={i} style={styles.legendItem}>
+                      <View style={[styles.legendDash, {
+                        backgroundColor: i === 0 ? "rgba(59,130,246,0.6)" : i === 1 ? "rgba(139,92,246,0.6)" : "rgba(245,158,11,0.6)"
+                      }]} />
+                      <Text style={styles.legendText}>{curve.label}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
 
             <View style={styles.metricsRow}>
@@ -549,6 +561,12 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     color: Colors.textPrimary,
     marginBottom: 4,
+  },
+  sectionHint: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontFamily: "Inter_400Regular",
+    marginTop: -8,
   },
   sectionLabel: {
     fontSize: 12,
@@ -708,13 +726,13 @@ const styles = StyleSheet.create({
     color: Colors.accent,
   },
   analyzeBtn: {
-    backgroundColor: Colors.accent,
-    borderRadius: 14,
-    paddingVertical: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
+    gap: 8,
+    backgroundColor: Colors.accent,
+    borderRadius: 14,
+    paddingVertical: 16,
     marginTop: 8,
   },
   analyzeBtnDisabled: {
@@ -722,21 +740,31 @@ const styles = StyleSheet.create({
   },
   analyzeBtnText: {
     fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Inter_700Bold",
     color: Colors.bg,
+  },
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 40,
+    gap: 12,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: Colors.textMuted,
+    fontFamily: "Inter_500Medium",
   },
   chartCard: {
     backgroundColor: Colors.bgCard,
     borderRadius: 16,
-    padding: 16,
+    padding: 12,
     borderWidth: 1,
     borderColor: Colors.border,
+    gap: 10,
   },
   chartLegend: {
     flexDirection: "row",
     gap: 16,
-    marginTop: 12,
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
   },
   legendItem: {
     flexDirection: "row",
@@ -748,29 +776,32 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
+  legendDash: {
+    width: 12,
+    height: 3,
+    borderRadius: 1.5,
+  },
   legendText: {
-    fontSize: 11,
+    fontSize: 10,
     color: Colors.textSecondary,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Inter_500Medium",
   },
   metricsRow: {
     flexDirection: "row",
     gap: 10,
   },
   breakEvenCard: {
-    backgroundColor: Colors.bgCardElevated,
+    backgroundColor: Colors.bgCard,
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: Colors.goldDim,
+    borderColor: Colors.border,
+    gap: 8,
   },
   breakEvenLabel: {
-    fontSize: 11,
-    color: Colors.gold,
+    fontSize: 12,
+    color: Colors.textSecondary,
     fontFamily: "Inter_500Medium",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 8,
   },
   breakEvenRow: {
     flexDirection: "row",
@@ -783,7 +814,7 @@ const styles = StyleSheet.create({
   },
   greeksCard: {
     backgroundColor: Colors.bgCard,
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 16,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -801,15 +832,15 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     flex: 1,
-    backgroundColor: Colors.accentDim,
-    borderRadius: 14,
-    paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+    backgroundColor: Colors.accentDim,
+    borderRadius: 12,
+    paddingVertical: 14,
     borderWidth: 1,
-    borderColor: Colors.accent,
+    borderColor: Colors.accent + "50",
   },
   saveBtnText: {
     fontSize: 14,
@@ -818,13 +849,13 @@ const styles = StyleSheet.create({
   },
   newBtn: {
     flex: 1,
-    backgroundColor: Colors.bgCardElevated,
-    borderRadius: 14,
-    paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+    backgroundColor: Colors.bgCardElevated,
+    borderRadius: 12,
+    paddingVertical: 14,
     borderWidth: 1,
     borderColor: Colors.border,
   },
@@ -832,15 +863,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
     color: Colors.textSecondary,
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: 40,
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: Colors.textMuted,
-    fontFamily: "Inter_400Regular",
   },
 });

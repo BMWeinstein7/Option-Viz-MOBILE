@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { View, StyleSheet, Text } from "react-native";
+import { View, StyleSheet } from "react-native";
 import Svg, {
   Path,
   Line,
@@ -16,33 +16,52 @@ interface PnLPoint {
   pnl: number;
 }
 
+interface TimeDecayCurve {
+  dte: number;
+  label: string;
+  data: PnLPoint[];
+}
+
 interface PnLChartProps {
   data: PnLPoint[];
   spotPrice: number;
   breakEvenPoints?: number[];
   height?: number;
+  timeDecayCurves?: TimeDecayCurve[];
 }
 
 const PAD = { top: 20, bottom: 40, left: 60, right: 20 };
+
+const TIME_COLORS = [
+  "rgba(59, 130, 246, 0.6)",
+  "rgba(139, 92, 246, 0.6)",
+  "rgba(245, 158, 11, 0.6)",
+];
 
 export function PnLChart({
   data,
   spotPrice,
   breakEvenPoints = [],
   height = 220,
+  timeDecayCurves = [],
 }: PnLChartProps) {
   const width = 340;
 
   const { minPrice, maxPrice, minPnl, maxPnl } = useMemo(() => {
+    const allPnls = [...data.map((d) => d.pnl)];
+    for (const curve of timeDecayCurves) {
+      for (const pt of curve.data) {
+        allPnls.push(pt.pnl);
+      }
+    }
     const prices = data.map((d) => d.price);
-    const pnls = data.map((d) => d.pnl);
     return {
       minPrice: Math.min(...prices),
       maxPrice: Math.max(...prices),
-      minPnl: Math.min(...pnls),
-      maxPnl: Math.max(...pnls),
+      minPnl: Math.min(...allPnls),
+      maxPnl: Math.max(...allPnls),
     };
-  }, [data]);
+  }, [data, timeDecayCurves]);
 
   const chartW = width - PAD.left - PAD.right;
   const chartH = height - PAD.top - PAD.bottom;
@@ -57,27 +76,23 @@ export function PnLChart({
 
   const zeroY = toY(0);
 
-  // Build SVG path
   const pathD = useMemo(() => {
     if (data.length === 0) return "";
     const pts = data.map((d) => `${toX(d.price)},${toY(d.pnl)}`);
     return `M ${pts.join(" L ")}`;
   }, [data, minPrice, maxPrice, minPnl, maxPnl, chartW, chartH]);
 
-  // Profit area fill (above zero)
   const profitAreaD = useMemo(() => {
     if (data.length === 0) return "";
     const pts = data
       .filter((d) => d.pnl >= 0)
       .map((d) => `${toX(d.price)},${toY(d.pnl)}`);
     if (pts.length === 0) return "";
-    // Simple fill: drop down to zero line
     const first = data.find((d) => d.pnl >= 0)!;
     const last = [...data].reverse().find((d) => d.pnl >= 0)!;
     return `M ${toX(first.price)},${zeroY} ${pts.join(" L ")} L ${toX(last.price)},${zeroY} Z`;
   }, [data, zeroY, minPrice, maxPrice, minPnl, maxPnl]);
 
-  // Loss area fill (below zero)
   const lossAreaD = useMemo(() => {
     if (data.length === 0) return "";
     const pts = data
@@ -88,6 +103,14 @@ export function PnLChart({
     const last = [...data].reverse().find((d) => d.pnl <= 0)!;
     return `M ${toX(first.price)},${zeroY} ${pts.join(" L ")} L ${toX(last.price)},${zeroY} Z`;
   }, [data, zeroY, minPrice, maxPrice, minPnl, maxPnl]);
+
+  const timeDecayPaths = useMemo(() => {
+    return timeDecayCurves.map((curve) => {
+      if (curve.data.length === 0) return "";
+      const pts = curve.data.map((d) => `${toX(d.price)},${toY(d.pnl)}`);
+      return `M ${pts.join(" L ")}`;
+    });
+  }, [timeDecayCurves, minPrice, maxPrice, minPnl, maxPnl, chartW, chartH]);
 
   const fmt = (n: number) => {
     const abs = Math.abs(n);
@@ -117,11 +140,9 @@ export function PnLChart({
           </LinearGradient>
         </Defs>
 
-        {/* Fill areas */}
         {profitAreaD ? <Path d={profitAreaD} fill="url(#profitGrad)" /> : null}
         {lossAreaD ? <Path d={lossAreaD} fill="url(#lossGrad)" /> : null}
 
-        {/* Zero line */}
         <Line
           x1={PAD.left}
           y1={zeroY}
@@ -132,7 +153,6 @@ export function PnLChart({
           strokeDasharray="4,4"
         />
 
-        {/* Current spot price line */}
         <Line
           x1={spotX}
           y1={PAD.top}
@@ -143,7 +163,6 @@ export function PnLChart({
           strokeDasharray="3,3"
         />
 
-        {/* Break-even markers */}
         {breakEvenPoints.map((be, i) => {
           const bx = toX(be);
           return (
@@ -162,19 +181,31 @@ export function PnLChart({
           );
         })}
 
-        {/* P&L curve */}
+        {timeDecayPaths.map((pathStr, i) =>
+          pathStr ? (
+            <Path
+              key={`td-${i}`}
+              d={pathStr}
+              fill="none"
+              stroke={TIME_COLORS[i] || TIME_COLORS[0]}
+              strokeWidth={1.5}
+              strokeDasharray="5,4"
+              strokeLinejoin="round"
+            />
+          ) : null
+        )}
+
         {pathD ? (
           <Path
             d={pathD}
             fill="none"
-            stroke={Colors.accent}
+            stroke="#e8edf5"
             strokeWidth={2.5}
             strokeLinejoin="round"
             strokeLinecap="round"
           />
         ) : null}
 
-        {/* Y-axis labels */}
         {yLabels.map((v, i) => (
           <SvgText
             key={i}
@@ -197,7 +228,6 @@ export function PnLChart({
           $0
         </SvgText>
 
-        {/* X-axis labels */}
         {[minPrice, spotPrice, maxPrice].map((p, i) => (
           <SvgText
             key={i}
@@ -210,6 +240,30 @@ export function PnLChart({
             {fmtPrice(p)}
           </SvgText>
         ))}
+
+        {timeDecayCurves.map((curve, i) => (
+          <SvgText
+            key={`label-${i}`}
+            x={width - PAD.right - 2}
+            y={PAD.top + 12 + i * 14}
+            fontSize={8}
+            fill={TIME_COLORS[i] || TIME_COLORS[0]}
+            textAnchor="end"
+          >
+            {curve.label}
+          </SvgText>
+        ))}
+        {timeDecayCurves.length > 0 && (
+          <SvgText
+            x={width - PAD.right - 2}
+            y={PAD.top + 12 + timeDecayCurves.length * 14}
+            fontSize={8}
+            fill="#e8edf5"
+            textAnchor="end"
+          >
+            At Expiry
+          </SvgText>
+        )}
       </Svg>
     </View>
   );
