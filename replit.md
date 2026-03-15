@@ -40,7 +40,16 @@ artifacts-monorepo/
 
 - **Repo**: https://github.com/BMWeinstein7/Option-Viz-MOBILE
 - **Branch**: master
-- **Release**: v2.0.0
+- **Release**: v2.1.0
+
+### Release Notes — v2.1.0
+
+#### New Features
+- **Performance Tab** — dedicated 4th tab showing total realized P&L, trade count (open/closed), win rate %, average gain/loss, and top 5 winners/losers ranked by both dollar P&L and percentage return. Includes "Export PDF" button that generates a styled HTML report via expo-print and opens the native share sheet via expo-sharing.
+
+#### Fixes & Improvements
+- **Post-merge script** — fixed timeout caused by interactive `drizzle-kit push` prompt; now uses `push-force` for non-interactive merge runs.
+- **Security hardening** — explicitly set `shell=False` on subprocess calls in eval tooling to clarify intent and suppress static analysis false positives.
 
 ## OptionViz Mobile App
 
