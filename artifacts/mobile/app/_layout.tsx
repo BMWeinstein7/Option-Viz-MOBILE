@@ -33,39 +33,32 @@ const queryClient = new QueryClient({
 });
 
 function AuthGate() {
-  const { user, isLoading, login } = useAuth();
+  const { user, login, register, logout } = useAppContext();
+  const { isLoading } = useAuth();
   const [isGuest, setIsGuest] = useState(false);
-  const [loginLoading, setLoginLoading] = useState(false);
 
   useEffect(() => {
     if (!isLoading && user) {
-      Analytics.identify(user.id, { auth_method: "oidc" });
+      Analytics.identify(user.id, {
+        email: user.email,
+        first_name: user.firstName,
+        auth_method: "email",
+      });
     }
   }, [user, isLoading]);
 
   if (isLoading) return null;
 
   if (!user && !isGuest) {
-    Analytics.track(AnalyticsEvents.AUTH_SCREEN_VIEWED);
     return (
       <AuthScreen
-        onLogin={async () => {
-          Analytics.track(AnalyticsEvents.AUTH_LOGIN_STARTED);
-          setLoginLoading(true);
-          try {
-            await login();
-            Analytics.track(AnalyticsEvents.AUTH_LOGIN_SUCCESS);
-          } catch (e) {
-            Analytics.track(AnalyticsEvents.AUTH_LOGIN_FAILED, { error: String(e) });
-          } finally {
-            setLoginLoading(false);
-          }
-        }}
+        onLogin={login}
+        onRegister={register}
         onGuest={() => {
           Analytics.track(AnalyticsEvents.AUTH_GUEST_MODE);
+          Analytics.track(AnalyticsEvents.GUEST_SESSION_STARTED);
           setIsGuest(true);
         }}
-        isLoading={loginLoading}
       />
     );
   }
@@ -90,6 +83,10 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
+
+  useEffect(() => {
+    Analytics.track(AnalyticsEvents.APP_OPENED);
+  }, []);
 
   if (!fontsLoaded && !fontError) return null;
 

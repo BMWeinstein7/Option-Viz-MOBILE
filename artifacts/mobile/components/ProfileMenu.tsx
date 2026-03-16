@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { Colors } from "@/constants/colors";
 import { useAppContext } from "@/context/AppContext";
+import { AuthScreen } from "@/components/AuthScreen";
+import { Analytics, AnalyticsEvents } from "@/lib/analytics";
 
 function getUserInitial(user: { firstName?: string | null; lastName?: string | null; email?: string | null } | null): string {
   if (!user) return "G";
@@ -37,7 +39,13 @@ export function ProfileButton() {
 
   return (
     <>
-      <Pressable style={styles.avatarBtn} onPress={() => setMenuOpen(true)}>
+      <Pressable
+        style={styles.avatarBtn}
+        onPress={() => {
+          Analytics.track(AnalyticsEvents.PROFILE_MENU_OPENED);
+          setMenuOpen(true);
+        }}
+      >
         {user ? (
           <Text style={styles.avatarText}>
             {getUserInitial(user)}
@@ -52,7 +60,8 @@ export function ProfileButton() {
 }
 
 function ProfileDrawer({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { user, logout, savedStrategies, openTrades } = useAppContext();
+  const { user, login, register, logout, savedStrategies, openTrades } = useAppContext();
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const handleLogout = async () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -68,69 +77,105 @@ function ProfileDrawer({ visible, onClose }: { visible: boolean; onClose: () => 
     ]);
   };
 
+  const handleLoginFromSidebar = () => {
+    Analytics.track(AnalyticsEvents.PROFILE_MENU_LOGIN_TAPPED);
+    setShowAuthModal(true);
+  };
+
   const openCount = openTrades.filter((t) => t.status === "open").length;
   const closedCount = openTrades.filter((t) => t.status === "closed").length;
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <View />
-      </Pressable>
-      <View style={styles.drawer}>
-        <View style={styles.drawerHandle} />
-
-        <View style={styles.profileSection}>
-          <View style={styles.profileAvatar}>
-            <Text style={styles.profileAvatarText}>
-              {getUserInitial(user)}
-            </Text>
-          </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>
-              {getUserDisplayName(user)}
-            </Text>
-            <Text style={styles.profileHandle}>
-              {getUserHandle(user)}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{savedStrategies.length}</Text>
-            <Text style={styles.statLabel}>Strategies</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{openCount}</Text>
-            <Text style={styles.statLabel}>Open</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{closedCount}</Text>
-            <Text style={styles.statLabel}>Closed</Text>
-          </View>
-        </View>
-
-        <View style={styles.menuSection}>
-          <MenuItem icon="settings" label="Preferences" onPress={() => {}} />
-          <MenuItem icon="bell" label="Notifications" onPress={() => {}} />
-          <MenuItem icon="help-circle" label="Help & Support" onPress={() => {}} />
-          <MenuItem icon="info" label="About OptionViz" onPress={() => {}} />
-        </View>
-
-        {user && (
-          <Pressable style={styles.logoutBtn} onPress={handleLogout}>
-            <Feather name="log-out" size={16} color={Colors.red} />
-            <Text style={styles.logoutText}>Sign Out</Text>
-          </Pressable>
-        )}
-
-        <Pressable style={styles.closeBtn} onPress={onClose}>
-          <Text style={styles.closeBtnText}>Close</Text>
+    <>
+      <Modal visible={visible} transparent animationType="slide">
+        <Pressable style={styles.overlay} onPress={onClose}>
+          <View />
         </Pressable>
-      </View>
-    </Modal>
+        <View style={styles.drawer}>
+          <View style={styles.drawerHandle} />
+
+          <View style={styles.profileSection}>
+            <View style={styles.profileAvatar}>
+              <Text style={styles.profileAvatarText}>
+                {getUserInitial(user)}
+              </Text>
+            </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>
+                {getUserDisplayName(user)}
+              </Text>
+              <Text style={styles.profileHandle}>
+                {getUserHandle(user)}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{savedStrategies.length}</Text>
+              <Text style={styles.statLabel}>Strategies</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{openCount}</Text>
+              <Text style={styles.statLabel}>Open</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{closedCount}</Text>
+              <Text style={styles.statLabel}>Closed</Text>
+            </View>
+          </View>
+
+          <View style={styles.menuSection}>
+            <MenuItem icon="settings" label="Preferences" onPress={() => {}} />
+            <MenuItem icon="bell" label="Notifications" onPress={() => {}} />
+            <MenuItem icon="help-circle" label="Help & Support" onPress={() => {}} />
+            <MenuItem icon="info" label="About OptionViz" onPress={() => {}} />
+          </View>
+
+          {user ? (
+            <Pressable style={styles.logoutBtn} onPress={handleLogout}>
+              <Feather name="log-out" size={16} color={Colors.red} />
+              <Text style={styles.logoutText}>Sign Out</Text>
+            </Pressable>
+          ) : (
+            <Pressable style={styles.loginBtn} onPress={handleLoginFromSidebar}>
+              <Feather name="log-in" size={16} color={Colors.accent} />
+              <Text style={styles.loginText}>Log In / Sign Up</Text>
+            </Pressable>
+          )}
+
+          <Pressable style={styles.closeBtn} onPress={onClose}>
+            <Text style={styles.closeBtnText}>Close</Text>
+          </Pressable>
+        </View>
+      </Modal>
+
+      <Modal visible={showAuthModal} animationType="slide">
+        <AuthScreen
+          onLogin={async (email, password) => {
+            const result = await login(email, password);
+            if (!result.error) {
+              setShowAuthModal(false);
+              onClose();
+            }
+            return result;
+          }}
+          onRegister={async (email, password, firstName, lastName) => {
+            const result = await register(email, password, firstName, lastName);
+            if (!result.error) {
+              setShowAuthModal(false);
+              onClose();
+            }
+            return result;
+          }}
+          onGuest={() => {
+            setShowAuthModal(false);
+          }}
+        />
+      </Modal>
+    </>
   );
 }
 
@@ -283,6 +328,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
     color: Colors.red,
+  },
+  loginBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: Colors.accentDim,
+    borderWidth: 1,
+    borderColor: Colors.accent + "30",
+    marginBottom: 12,
+  },
+  loginText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.accent,
   },
   closeBtn: {
     paddingVertical: 14,

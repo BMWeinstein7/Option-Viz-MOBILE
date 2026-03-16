@@ -92,7 +92,7 @@ router.get("/market/stream/:ticker", (req: Request, res: Response) => {
 
   const sendQuote = async () => {
     try {
-      const quote = await fetchStockQuote(ticker);
+      const quote = await fetchStockQuote(ticker as string);
       res.write(`data: ${JSON.stringify(quote)}\n\n`);
     } catch {
       res.write(`data: ${JSON.stringify({ error: "fetch_failed" })}\n\n`);
