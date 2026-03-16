@@ -40,7 +40,18 @@ artifacts-monorepo/
 
 - **Repo**: https://github.com/BMWeinstein7/Option-Viz-MOBILE
 - **Branch**: master
-- **Release**: v3.0.0
+- **Release**: v3.1.0
+
+### Release Notes — v3.1.0 (Current)
+
+#### Email/Password Authentication & Guest Session Management
+- **Email/password auth** — bcryptjs (12 salt rounds) register/login/logout with server-side sessions
+- **Sign in / Sign up form** — clean toggle UI with email, password, optional name fields, password visibility toggle
+- **Guest session timeout** — 30-minute inactivity timeout clears local guest data (strategies, trades)
+- **Profile menu login** — guest users see "Log In / Sign Up" button in sidebar drawer
+- **Auth route hardening** — type-checked inputs prevent runtime crashes from malformed payloads
+- **OIDC removal** — removed openid-client, expo-auth-session, expo-web-browser dependencies
+- **New analytics events** — GUEST_SESSION_EXPIRED, GUEST_SESSION_STARTED, APP_OPENED, APP_BACKGROUNDED, PROFILE_MENU_LOGIN_TAPPED
 
 ### Release Notes — v3.0.0
 
