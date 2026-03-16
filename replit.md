@@ -13,7 +13,7 @@ pnpm workspace monorepo using TypeScript. Contains an Expo React Native mobile a
 - **API framework**: Express 5
 - **Mobile**: Expo React Native (SDK 53)
 - **Database**: PostgreSQL + Drizzle ORM
-- **Auth**: Replit Auth (OpenID Connect with PKCE via openid-client v6)
+- **Auth**: Email/password (bcryptjs) with server-side sessions
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **Build**: esbuild (CJS bundle)
 
@@ -66,12 +66,12 @@ artifacts-monorepo/
 - **File lifecycle management** — temp files cleaned up after export; robust error handling with user-facing fallback messages
 
 #### Authentication & Cloud Sync
-- **Replit Auth (OIDC with PKCE)** — secure login via OpenID Connect using openid-client v6; no custom login forms
-- **Mobile auth flow** — expo-auth-session opens OIDC provider, exchanges authorization code via token exchange endpoint, stores session token in expo-secure-store
+- **Email/password auth** — bcryptjs (12 salt rounds) register/login/logout with server-side sessions
+- **Mobile auth flow** — email/password form with sign-in/sign-up toggle, session token stored in expo-secure-store
 - **Web session management** — cookie-based sessions with httpOnly secure cookies
 - **Server-side strategy persistence** — saved strategies synced to PostgreSQL for logged-in users
-- **Guest mode** — full functionality with local AsyncStorage persistence (no account required)
-- **Profile menu** — hamburger-style drawer with user stats, preferences, and sign-out
+- **Guest mode** — full functionality with local AsyncStorage persistence (no account required); 30-minute inactivity timeout clears guest data
+- **Profile menu** — hamburger-style drawer with user stats, preferences, sign-out, and "Log In" button for guests
 
 #### Market Data
 - **Live Quotes** — real-time streaming stock quotes via SSE
@@ -96,9 +96,10 @@ artifacts-monorepo/
 - **Editable contract sizes** — +/- quantity controls on each leg with inline stepper
 - **SSE streaming market data** — real-time price updates for any US stock ticker
 - Full options chain with flow analysis and put/call ratio
-- **User authentication** — OIDC login via Replit Auth; welcome screen with Log In / Continue as Guest
+- **User authentication** — email/password login (bcryptjs); welcome screen with Sign In / Sign Up / Continue as Guest
+- **Guest session timeout** — 30-minute inactivity timeout clears local guest data
 - **Server-side strategy persistence** — saved strategies synced to PostgreSQL for logged-in users
-- **Profile menu** — hamburger-style drawer with user stats, preferences, sign-out
+- **Profile menu** — hamburger-style drawer with user stats, preferences, sign-out, and "Log In" for guests
 - **Trade tracking with live P&L** — open trades show unrealized P&L computed from current live midpoints
 - **Performance dashboard** — realized P&L summary with timeframe filtering (1W/1M/3M/6M/1Y/ALL)
 - **Trade editing** — edit entry costs, close at live prices, delete trades
@@ -110,13 +111,12 @@ artifacts-monorepo/
 - **Portfolio** (`app/(tabs)/portfolio.tsx`) — 3 sub-tabs: Dashboard (performance summary), Saved Strategies, Trades (open/closed with live P&L)
 
 ### Auth Flow
-- Welcome screen shows first (AuthScreen component)
-- Options: Log In (OIDC redirect), Continue as Guest
-- Replit Auth via OpenID Connect with PKCE (openid-client v6)
-- Mobile: expo-auth-session opens OIDC provider, exchanges code via POST /api/mobile-auth/token-exchange, stores session token in expo-secure-store
-- Web: cookie-based session with httpOnly secure cookies
+- AuthScreen shows first with Sign In / Sign Up toggle + "Continue as Guest"
+- Email/password auth with bcryptjs (12 salt rounds) on server
+- Mobile stores session token in expo-secure-store, sends as Authorization header
 - authMiddleware loads user from session on every request, patches req.isAuthenticated()
-- Guest mode uses AsyncStorage for local strategy persistence
+- Guest mode uses AsyncStorage for local strategy persistence; 30-minute inactivity timeout
+- Profile menu sidebar shows "Log In / Sign Up" button for guest users
 - Logged-in mode syncs strategies to server
 
 ### Trade Model
@@ -156,11 +156,9 @@ interface TradeLeg {
 - `GET /api/market/stream/:ticker` — SSE streaming quotes
 - `POST /api/strategy/analyze` — strategy P&L analysis with time-decay curves
 - `GET /api/auth/user` — get current authenticated user
-- `GET /api/login` — start OIDC login flow (302 redirect)
-- `GET /api/callback` — OIDC callback (302 redirect)
-- `GET /api/logout` — clear session + OIDC logout (302 redirect)
-- `POST /api/mobile-auth/token-exchange` — exchange mobile OIDC code for session token
-- `POST /api/mobile-auth/logout` — delete mobile session
+- `POST /api/auth/register` — register with email/password (+ optional firstName/lastName)
+- `POST /api/auth/login` — login with email/password
+- `POST /api/auth/logout` — clear session
 - `GET /api/strategies` — list user strategies
 - `POST /api/strategies` — save strategy
 - `DELETE /api/strategies/:id` — delete strategy
@@ -169,13 +167,13 @@ interface TradeLeg {
 - `api-server/src/lib/marketData.ts` — market data generation (any ticker via hash-based fallback)
 - `api-server/src/routes/market.ts` — all market endpoints
 - `api-server/src/routes/strategy.ts` — Black-Scholes strategy analysis
-- `api-server/src/routes/auth.ts` — OIDC auth routes (login, callback, logout, mobile token exchange)
-- `api-server/src/lib/auth.ts` — session CRUD, OIDC config, user upsert
+- `api-server/src/routes/auth.ts` — email/password register, login, logout routes (bcryptjs)
+- `api-server/src/lib/auth.ts` — session CRUD (in-memory Map store)
 - `api-server/src/middlewares/authMiddleware.ts` — loads user from session, patches req.isAuthenticated()
 - `api-server/src/routes/strategies.ts` — strategy CRUD routes
 - `api-server/src/app.ts` — Express app with cookie-parser + authMiddleware + CORS
-- `mobile/lib/auth.tsx` — AuthProvider with expo-auth-session OIDC + SecureStore token
-- `mobile/components/AuthScreen.tsx` — welcome screen with Log In button (no forms)
+- `mobile/lib/auth.tsx` — AuthProvider with email/password auth + SecureStore token
+- `mobile/components/AuthScreen.tsx` — sign-in/sign-up form with email, password, name fields
 - `mobile/components/ProfileMenu.tsx` — hamburger profile drawer
 - `mobile/components/PnLChart.tsx` — SVG P&L chart with time-decay overlays
 - `mobile/components/LegRow.tsx` — leg display with live bid/ask/mid + editable quantity
@@ -218,7 +216,7 @@ Expo React Native app (OptionViz).
 
 ### `lib/db` (`@workspace/db`)
 
-Database layer using Drizzle ORM with PostgreSQL. Tables: users (varchar id, email, firstName, lastName, profileImageUrl), sessions (sid, sess, expire), saved_strategies.
+Database layer using Drizzle ORM with PostgreSQL. Tables: users (varchar id, email, passwordHash, firstName, lastName, profileImageUrl), saved_strategies.
 
 ### `lib/api-spec` (`@workspace/api-spec`)
 

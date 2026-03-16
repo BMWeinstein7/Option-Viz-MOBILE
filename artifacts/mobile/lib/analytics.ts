@@ -282,4 +282,11 @@ export const AnalyticsEvents = {
 
   TAB_NAVIGATED: "tab_navigated",
   PROFILE_MENU_OPENED: "profile_menu_opened",
+  PROFILE_MENU_LOGIN_TAPPED: "profile_menu_login_tapped",
+
+  GUEST_SESSION_EXPIRED: "guest_session_expired",
+  GUEST_SESSION_STARTED: "guest_session_started",
+
+  APP_OPENED: "app_opened",
+  APP_BACKGROUNDED: "app_backgrounded",
 } as const;

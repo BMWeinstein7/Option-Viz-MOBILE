@@ -6,8 +6,10 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import { AppState, type AppStateStatus } from "react-native";
 import { useAuth } from "@/lib/auth";
 import { api, AuthUser, ServerStrategy } from "@/hooks/useApi";
+import { Analytics, AnalyticsEvents } from "@/lib/analytics";
 
 export interface SavedLeg {
   id: string;
@@ -59,7 +61,8 @@ export interface OpenTrade {
 interface AppContextType {
   user: AuthUser | null;
   isAuthLoading: boolean;
-  login: () => Promise<void>;
+  login: (email: string, password: string) => Promise<{ error?: string }>;
+  register: (email: string, password: string, firstName?: string, lastName?: string) => Promise<{ error?: string }>;
   logout: () => Promise<void>;
   savedStrategies: SavedStrategy[];
   openTrades: OpenTrade[];
@@ -78,9 +81,40 @@ const AppContext = createContext<AppContextType | null>(null);
 
 const STRATEGIES_KEY = "optionviz_strategies";
 const TRADES_KEY = "optionviz_trades";
+const GUEST_LAST_ACTIVE_KEY = "optionviz_guest_last_active";
+const GUEST_TIMEOUT_MS = 30 * 60 * 1000;
+
+async function checkAndClearGuestData(): Promise<boolean> {
+  try {
+    const lastActive = await AsyncStorage.getItem(GUEST_LAST_ACTIVE_KEY);
+    if (!lastActive) return false;
+
+    const elapsed = Date.now() - parseInt(lastActive, 10);
+    if (elapsed >= GUEST_TIMEOUT_MS) {
+      await AsyncStorage.multiRemove([STRATEGIES_KEY, TRADES_KEY, GUEST_LAST_ACTIVE_KEY]);
+      Analytics.track(AnalyticsEvents.GUEST_SESSION_EXPIRED, {
+        elapsed_minutes: Math.round(elapsed / 60000),
+      });
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+async function touchGuestActivity() {
+  try {
+    await AsyncStorage.setItem(GUEST_LAST_ACTIVE_KEY, String(Date.now()));
+  } catch {}
+}
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const { user: authUser, isLoading: isAuthLoading, login: authLogin, logout: authLogout } = useAuth();
+  const {
+    user: authUser,
+    isLoading: isAuthLoading,
+    login: authLogin,
+    register: authRegister,
+    logout: authLogout,
+  } = useAuth();
   const [savedStrategies, setSavedStrategies] = useState<SavedStrategy[]>([]);
   const [openTrades, setOpenTrades] = useState<OpenTrade[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -95,16 +129,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const load = async () => {
-      try {
-        const tradesJson = await AsyncStorage.getItem(TRADES_KEY);
-        if (tradesJson) setOpenTrades(JSON.parse(tradesJson));
-      } catch (e) {
-        console.error("Failed to load trades:", e);
+      if (!user) {
+        const cleared = await checkAndClearGuestData();
+        if (!cleared) {
+          try {
+            const tradesJson = await AsyncStorage.getItem(TRADES_KEY);
+            if (tradesJson) setOpenTrades(JSON.parse(tradesJson));
+            const strategiesJson = await AsyncStorage.getItem(STRATEGIES_KEY);
+            if (strategiesJson) setSavedStrategies(JSON.parse(strategiesJson));
+          } catch (e) {
+            console.error("Failed to load local data:", e);
+          }
+        }
+      } else {
+        try {
+          const tradesJson = await AsyncStorage.getItem(TRADES_KEY);
+          if (tradesJson) setOpenTrades(JSON.parse(tradesJson));
+        } catch (e) {
+          console.error("Failed to load trades:", e);
+        }
       }
       setIsLoaded(true);
     };
     load();
   }, []);
+
+  useEffect(() => {
+    if (user) return;
+
+    const handleAppState = (state: AppStateStatus) => {
+      if (state === "active") {
+        checkAndClearGuestData().then((cleared) => {
+          if (cleared) {
+            setSavedStrategies([]);
+            setOpenTrades([]);
+          }
+        });
+      }
+    };
+
+    const sub = AppState.addEventListener("change", handleAppState);
+    return () => sub.remove();
+  }, [user]);
 
   const refreshStrategies = useCallback(async () => {
     if (!user) {
@@ -135,19 +201,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     refreshStrategies();
   }, [user, refreshStrategies]);
 
-  const login = useCallback(async () => {
-    await authLogin();
+  const login = useCallback(async (email: string, password: string): Promise<{ error?: string }> => {
+    Analytics.track(AnalyticsEvents.AUTH_LOGIN_STARTED, { email_domain: email.split("@")[1] });
+    const result = await authLogin(email, password);
+    if (result.error) {
+      Analytics.track(AnalyticsEvents.AUTH_LOGIN_FAILED, { error: result.error });
+    } else {
+      Analytics.track(AnalyticsEvents.AUTH_LOGIN_SUCCESS);
+      await AsyncStorage.removeItem(GUEST_LAST_ACTIVE_KEY);
+    }
+    return result;
   }, [authLogin]);
 
+  const register = useCallback(async (
+    email: string,
+    password: string,
+    firstName?: string,
+    lastName?: string,
+  ): Promise<{ error?: string }> => {
+    Analytics.track(AnalyticsEvents.AUTH_REGISTER_STARTED, { email_domain: email.split("@")[1] });
+    const result = await authRegister(email, password, firstName, lastName);
+    if (result.error) {
+      Analytics.track(AnalyticsEvents.AUTH_REGISTER_FAILED, { error: result.error });
+    } else {
+      Analytics.track(AnalyticsEvents.AUTH_REGISTER_SUCCESS);
+      await AsyncStorage.removeItem(GUEST_LAST_ACTIVE_KEY);
+    }
+    return result;
+  }, [authRegister]);
+
   const logout = useCallback(async () => {
+    Analytics.track(AnalyticsEvents.AUTH_LOGOUT);
+    Analytics.reset();
     await authLogout();
     setSavedStrategies([]);
+    setOpenTrades([]);
   }, [authLogout]);
 
   const persistTrades = useCallback(async (trades: OpenTrade[]) => {
     await AsyncStorage.setItem(TRADES_KEY, JSON.stringify(trades));
     setOpenTrades(trades);
-  }, []);
+    if (!user) await touchGuestActivity();
+  }, [user]);
 
   const saveStrategy = useCallback(
     async (strategy: Omit<SavedStrategy, "id" | "createdAt" | "updatedAt">) => {
@@ -160,6 +255,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             legs: strategy.legs,
           });
           await refreshStrategies();
+          Analytics.track(AnalyticsEvents.BUILDER_STRATEGY_SAVED, {
+            ticker: strategy.ticker,
+            strategy_name: strategy.name,
+            synced: true,
+          });
           return;
         } catch {}
       }
@@ -172,6 +272,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const updated = [...savedStrategies, newStrategy];
       await AsyncStorage.setItem(STRATEGIES_KEY, JSON.stringify(updated));
       setSavedStrategies(updated);
+      if (!user) await touchGuestActivity();
+      Analytics.track(AnalyticsEvents.BUILDER_STRATEGY_SAVED, {
+        ticker: strategy.ticker,
+        strategy_name: strategy.name,
+        synced: false,
+      });
     },
     [user, savedStrategies, refreshStrategies]
   );
@@ -183,8 +289,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       );
       await AsyncStorage.setItem(STRATEGIES_KEY, JSON.stringify(updated));
       setSavedStrategies(updated);
+      if (!user) await touchGuestActivity();
     },
-    [savedStrategies]
+    [savedStrategies, user]
   );
 
   const deleteStrategy = useCallback(
@@ -196,6 +303,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const updated = savedStrategies.filter((s) => s.id !== id);
       await AsyncStorage.setItem(STRATEGIES_KEY, JSON.stringify(updated));
       setSavedStrategies(updated);
+      Analytics.track(AnalyticsEvents.PORTFOLIO_STRATEGY_DELETED, {
+        ticker: strategy?.ticker,
+        strategy_name: strategy?.name,
+      });
     },
     [savedStrategies, user]
   );
@@ -209,6 +320,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       const updated = [...openTrades, newTrade];
       await persistTrades(updated);
+      Analytics.track(AnalyticsEvents.BUILDER_TRADE_OPENED, {
+        ticker: trade.ticker,
+        strategy_name: trade.strategyName,
+        entry_cost: trade.entryNetCost,
+      });
     },
     [openTrades, persistTrades]
   );
@@ -219,12 +335,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         t.id === tradeId ? { ...t, ...updates } : t
       );
       await persistTrades(updated);
+      Analytics.track(AnalyticsEvents.TRADE_EDIT_SAVED, { trade_id: tradeId });
     },
     [openTrades, persistTrades]
   );
 
   const closeTrade = useCallback(
     async (tradeId: string, exitValue: number) => {
+      const trade = openTrades.find((t) => t.id === tradeId);
       const updated = openTrades.map((t) => {
         if (t.id === tradeId) {
           const realizedPnL = exitValue - t.entryNetCost;
@@ -239,14 +357,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return t;
       });
       await persistTrades(updated);
+      Analytics.track(AnalyticsEvents.TRADE_CLOSE_LIVE, {
+        ticker: trade?.ticker,
+        realized_pnl: trade ? exitValue - trade.entryNetCost : 0,
+      });
     },
     [openTrades, persistTrades]
   );
 
   const deleteTrade = useCallback(
     async (tradeId: string) => {
+      const trade = openTrades.find((t) => t.id === tradeId);
       const updated = openTrades.filter((t) => t.id !== tradeId);
       await persistTrades(updated);
+      Analytics.track(AnalyticsEvents.TRADE_DELETED, {
+        ticker: trade?.ticker,
+        status: trade?.status,
+      });
     },
     [openTrades, persistTrades]
   );
@@ -257,6 +384,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         user,
         isAuthLoading,
         login,
+        register,
         logout,
         savedStrategies,
         openTrades,
