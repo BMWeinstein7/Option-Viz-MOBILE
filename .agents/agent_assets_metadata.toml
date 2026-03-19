@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "eLPZay4_JW3u3kVrfMgYo"
+uri = "file://docs/DESIGN_SPEC.md"
+type = "text"
+title = "OptionViz Liquid Glass Design Specification"
