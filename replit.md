@@ -40,9 +40,19 @@ artifacts-monorepo/
 
 - **Repo**: https://github.com/BMWeinstein7/Option-Viz-MOBILE
 - **Branch**: master
-- **Release**: v3.1.0
+- **Release**: v3.2.0
 
-### Release Notes — v3.1.0 (Current)
+### Release Notes — v3.2.0 (Current)
+
+#### Enhanced Trade Execution UI & Complete Documentation
+- **Two-tier trade button layout** — primary close actions (Close @ Live, Close Manual) as full-width stacked buttons; secondary actions (Edit, Delete) in a compact row below
+- **Close @ Live text fix** — label and dollar value split into separate text elements preventing overflow/clipping
+- **Full-width button guarantee** — `alignSelf: "stretch"` on primary buttons for consistent rendering across all devices
+- **Delete button label** — now includes "Delete" text label alongside trash icon
+- **Complete README** — full rewrite with screenshots, design system, tech stack, architecture, all API endpoints, analytics events
+- **Design spec** — `docs/DESIGN_SPEC.md` with every color, typography, spacing, corner radius, and per-screen layout
+
+### Release Notes — v3.1.0
 
 #### Email/Password Authentication & Guest Session Management
 - **Email/password auth** — bcryptjs (12 salt rounds) register/login/logout with server-side sessions
