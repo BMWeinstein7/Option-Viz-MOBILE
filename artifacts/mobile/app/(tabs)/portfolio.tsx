@@ -466,25 +466,35 @@ function TradeCard({ trade, onDelete }: { trade: OpenTrade; onDelete: () => void
           <View style={styles.tradeActions}>
             {isOpen && (
               <>
-                <Pressable style={styles.editTradeBtn} onPress={() => { setEditLegs([...trade.legs]); setEditEntry(String(trade.entryNetCost)); setEditModal(true); }}>
-                  <Feather name="edit-2" size={14} color={Colors.textSecondary} />
-                  <Text style={styles.editTradeBtnText}>Edit</Text>
-                </Pressable>
                 {currentValue != null && (
                   <Pressable style={styles.closeAtLiveBtn} onPress={handleCloseAtLive}>
-                    <Feather name="zap" size={14} color={Colors.gold} />
-                    <Text style={styles.closeAtLiveBtnText}>Close @ Live (${Math.abs(currentValue).toFixed(0)})</Text>
+                    <Feather name="zap" size={15} color={Colors.gold} />
+                    <Text style={styles.closeAtLiveBtnText} numberOfLines={1}>
+                      Close @ Live
+                    </Text>
+                    <Text style={styles.closeAtLiveValue} numberOfLines={1}>
+                      ${Math.abs(currentValue).toFixed(0)}
+                    </Text>
                   </Pressable>
                 )}
                 <Pressable style={styles.closeTradeBtn} onPress={() => setCloseModal(true)}>
-                  <Feather name="stop-circle" size={14} color={Colors.red} />
+                  <Feather name="stop-circle" size={15} color={Colors.red} />
                   <Text style={styles.closeTradeBtnText}>Close Manual</Text>
                 </Pressable>
               </>
             )}
-            <Pressable style={styles.deleteTradeBtn} onPress={() => Alert.alert("Delete Trade", "Remove this trade from your history?", [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: onDelete }])}>
-              <Feather name="trash-2" size={14} color={Colors.red} />
-            </Pressable>
+            <View style={styles.tradeActionsSecondary}>
+              {isOpen && (
+                <Pressable style={styles.editTradeBtn} onPress={() => { setEditLegs([...trade.legs]); setEditEntry(String(trade.entryNetCost)); setEditModal(true); }}>
+                  <Feather name="edit-2" size={14} color={Colors.textSecondary} />
+                  <Text style={styles.editTradeBtnText}>Edit</Text>
+                </Pressable>
+              )}
+              <Pressable style={styles.deleteTradeBtn} onPress={() => Alert.alert("Delete Trade", "Remove this trade from your history?", [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: onDelete }])}>
+                <Feather name="trash-2" size={14} color={Colors.red} />
+                <Text style={styles.deleteTradeBtnText}>Delete</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       )}
@@ -791,14 +801,17 @@ const styles = StyleSheet.create({
   tradeLegQty: { fontSize: 12, fontFamily: "Inter_500Medium", color: Colors.textSecondary },
   tradeLegEntry: { fontSize: 11, fontFamily: "Inter_500Medium", color: Colors.textSecondary },
   tradeLegLive: { fontSize: 11, fontFamily: "Inter_600SemiBold", marginTop: 2 },
-  tradeActions: { flexDirection: "row", gap: 8, marginTop: 4 },
-  editTradeBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: Colors.glass, borderRadius: 10, borderWidth: 1, borderColor: Colors.glassBorder },
+  tradeActions: { gap: 10, marginTop: 6 },
+  tradeActionsSecondary: { flexDirection: "row", gap: 8 },
+  editTradeBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 11, paddingHorizontal: 16, backgroundColor: Colors.glass, borderRadius: 12, borderWidth: 1, borderColor: Colors.glassBorder },
   editTradeBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.textSecondary },
-  closeAtLiveBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, backgroundColor: Colors.goldDim, borderRadius: 10, borderWidth: 1, borderColor: Colors.gold + "25" },
-  closeAtLiveBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: Colors.gold },
-  closeTradeBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: Colors.redDim, borderRadius: 10, borderWidth: 1, borderColor: Colors.red + "20" },
-  closeTradeBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: Colors.red },
-  deleteTradeBtn: { paddingVertical: 10, paddingHorizontal: 10, backgroundColor: Colors.glass, borderRadius: 10, borderWidth: 1, borderColor: Colors.glassBorder, justifyContent: "center" },
+  closeAtLiveBtn: { alignSelf: "stretch" as const, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 13, paddingHorizontal: 20, backgroundColor: Colors.goldDim, borderRadius: 12, borderWidth: 1, borderColor: Colors.gold + "25" },
+  closeAtLiveBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.gold },
+  closeAtLiveValue: { fontSize: 14, fontFamily: "Inter_700Bold", color: Colors.gold },
+  closeTradeBtn: { alignSelf: "stretch" as const, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 13, paddingHorizontal: 20, backgroundColor: Colors.redDim, borderRadius: 12, borderWidth: 1, borderColor: Colors.red + "20" },
+  closeTradeBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.red },
+  deleteTradeBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 11, paddingHorizontal: 16, backgroundColor: Colors.glass, borderRadius: 12, borderWidth: 1, borderColor: Colors.red + "15" },
+  deleteTradeBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.red },
   editLegRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: Colors.glassElevated, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: Colors.glassBorder },
   editLegInfo: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
   editLegStrike: { fontSize: 13, fontFamily: "Inter_700Bold", color: Colors.textPrimary },
