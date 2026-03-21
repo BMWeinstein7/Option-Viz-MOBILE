@@ -5,6 +5,8 @@ import { eq, desc, and } from "drizzle-orm";
 
 const router = Router();
 
+const TICKER_RE = /^[A-Za-z.]{1,10}$/;
+
 router.get("/strategies", async (req, res) => {
   if (!req.isAuthenticated()) {
     res.status(401).json({ error: "Authentication required" });
@@ -45,10 +47,22 @@ router.post("/strategies", async (req, res) => {
       return;
     }
 
+    if (typeof ticker !== "string" || !TICKER_RE.test(ticker.trim())) {
+      res.status(400).json({ error: "Invalid ticker format" });
+      return;
+    }
+
+    if (!Array.isArray(legs) || legs.length === 0) {
+      res.status(400).json({ error: "At least one leg is required" });
+      return;
+    }
+
+    const cleanTicker = ticker.trim().toUpperCase();
+
     const [strategy] = await db.insert(savedStrategiesTable).values({
       userId: req.user.id,
       name,
-      ticker,
+      ticker: cleanTicker,
       spotPrice: String(spotPrice),
       legs,
     }).returning();

@@ -24,6 +24,7 @@ import { GreeksBar } from "@/components/GreeksBar";
 import { ProfileButton } from "@/components/ProfileMenu";
 import { useAppContext, TradeLeg } from "@/context/AppContext";
 import { Analytics, AnalyticsEvents } from "@/lib/analytics";
+import { fmtMoney } from "@/lib/format";
 
 type BuilderStep = "ticker" | "template" | "legs" | "analysis";
 
@@ -368,11 +369,9 @@ export default function BuilderScreen() {
     setShowAddLeg(false);
   }, []);
 
-  const fmtMoney = (n: number | null | undefined) => {
+  const fmtMoneyOrUnlimited = (n: number | null | undefined) => {
     if (n == null) return "Unlimited";
-    const abs = Math.abs(n);
-    if (abs >= 1000) return `${n >= 0 ? "+" : "-"}$${(abs / 1000).toFixed(1)}k`;
-    return `${n >= 0 ? "+" : "-"}$${abs.toFixed(0)}`;
+    return fmtMoney(n);
   };
 
   return (
@@ -386,7 +385,7 @@ export default function BuilderScreen() {
         </View>
         <View style={styles.headerRight}>
           {step !== "ticker" ? (
-            <Pressable onPress={handleReset} style={styles.resetBtn}>
+            <Pressable onPress={handleReset} style={styles.resetBtn} accessibilityLabel="Reset builder" accessibilityRole="button">
               <Feather name="refresh-cw" size={14} color={Colors.textSecondary} />
             </Pressable>
           ) : null}
@@ -417,7 +416,7 @@ export default function BuilderScreen() {
                 onSubmitEditing={handleTickerSearch}
                 returnKeyType="search"
               />
-              <Pressable style={styles.searchBtn} onPress={handleTickerSearch}>
+              <Pressable style={styles.searchBtn} onPress={handleTickerSearch} accessibilityLabel="Search ticker" accessibilityRole="button">
                 <Feather name="search" size={18} color={Colors.bg} />
               </Pressable>
             </View>
@@ -425,7 +424,7 @@ export default function BuilderScreen() {
             <Text style={styles.sectionLabel}>Popular</Text>
             <View style={styles.tickerGrid}>
               {POPULAR_TICKERS.slice(0, 30).map((t) => (
-                <Pressable key={t} style={({ pressed }) => [styles.tickerChip, pressed && styles.tickerChipPressed]} onPress={() => handleTickerSelect(t)}>
+                <Pressable key={t} style={({ pressed }) => [styles.tickerChip, pressed && styles.tickerChipPressed]} onPress={() => handleTickerSelect(t)} accessibilityLabel={`Select ${t}`} accessibilityRole="button">
                   <Text style={styles.tickerChipText}>{t}</Text>
                 </Pressable>
               ))}
