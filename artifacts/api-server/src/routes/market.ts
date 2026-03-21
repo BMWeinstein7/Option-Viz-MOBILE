@@ -62,8 +62,13 @@ router.get("/market/chain/:ticker/:expiration", async (req, res) => {
     const ticker = sanitizeTicker(req.params.ticker);
     if (!ticker) { res.status(400).json({ error: "BAD_REQUEST", message: "Invalid ticker format" }); return; }
     const expiration = req.params.expiration;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(expiration) || isNaN(Date.parse(expiration))) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(expiration)) {
       res.status(400).json({ error: "BAD_REQUEST", message: "Invalid expiration date format (YYYY-MM-DD)" }); return;
+    }
+    const [y, m, d] = expiration.split("-").map(Number);
+    const parsed = new Date(y, m - 1, d);
+    if (parsed.getFullYear() !== y || parsed.getMonth() !== m - 1 || parsed.getDate() !== d) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "Invalid calendar date" }); return;
     }
     const chain = await fetchOptionsChain(ticker, expiration);
     res.json({

@@ -57,10 +57,12 @@ router.post("/strategies", async (req, res) => {
       return;
     }
 
+    const cleanTicker = ticker.trim().toUpperCase();
+
     const [strategy] = await db.insert(savedStrategiesTable).values({
       userId: req.user.id,
       name,
-      ticker,
+      ticker: cleanTicker,
       spotPrice: String(spotPrice),
       legs,
     }).returning();
