@@ -57,42 +57,47 @@ router.post("/auth/register", async (req: Request, res: Response) => {
     return;
   }
 
-  const [existing] = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(eq(usersTable.email, trimmedEmail));
+  try {
+    const [existing] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.email, trimmedEmail));
 
-  if (existing) {
-    res.status(409).json({ error: "An account with this email already exists" });
-    return;
+    if (existing) {
+      res.status(409).json({ error: "An account with this email already exists" });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+
+    const [user] = await db
+      .insert(usersTable)
+      .values({
+        email: trimmedEmail,
+        passwordHash,
+        firstName: typeof firstName === "string" ? firstName.trim() || null : null,
+        lastName: typeof lastName === "string" ? lastName.trim() || null : null,
+      })
+      .returning();
+
+    const sessionData: SessionData = {
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        profileImageUrl: user.profileImageUrl,
+      },
+    };
+
+    const sid = await createSession(sessionData);
+    setSessionCookie(res, sid);
+
+    res.status(201).json({ user: sessionData.user, token: sid });
+  } catch (err) {
+    console.error("Registration error:", err);
+    res.status(500).json({ error: "Registration failed. Please try again." });
   }
-
-  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-
-  const [user] = await db
-    .insert(usersTable)
-    .values({
-      email: trimmedEmail,
-      passwordHash,
-      firstName: typeof firstName === "string" ? firstName.trim() || null : null,
-      lastName: typeof lastName === "string" ? lastName.trim() || null : null,
-    })
-    .returning();
-
-  const sessionData: SessionData = {
-    user: {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      profileImageUrl: user.profileImageUrl,
-    },
-  };
-
-  const sid = await createSession(sessionData);
-  setSessionCookie(res, sid);
-
-  res.status(201).json({ user: sessionData.user, token: sid });
 });
 
 router.post("/auth/login", async (req: Request, res: Response) => {
@@ -110,36 +115,41 @@ router.post("/auth/login", async (req: Request, res: Response) => {
 
   const trimmedEmail = email.trim().toLowerCase();
 
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.email, trimmedEmail));
+  try {
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, trimmedEmail));
 
-  if (!user || !user.passwordHash) {
-    res.status(401).json({ error: "Invalid email or password" });
-    return;
+    if (!user || !user.passwordHash) {
+      res.status(401).json({ error: "Invalid email or password" });
+      return;
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: "Invalid email or password" });
+      return;
+    }
+
+    const sessionData: SessionData = {
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        profileImageUrl: user.profileImageUrl,
+      },
+    };
+
+    const sid = await createSession(sessionData);
+    setSessionCookie(res, sid);
+
+    res.json({ user: sessionData.user, token: sid });
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ error: "Login failed. Please try again." });
   }
-
-  const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) {
-    res.status(401).json({ error: "Invalid email or password" });
-    return;
-  }
-
-  const sessionData: SessionData = {
-    user: {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      profileImageUrl: user.profileImageUrl,
-    },
-  };
-
-  const sid = await createSession(sessionData);
-  setSessionCookie(res, sid);
-
-  res.json({ user: sessionData.user, token: sid });
 });
 
 router.post("/auth/logout", async (req: Request, res: Response) => {
