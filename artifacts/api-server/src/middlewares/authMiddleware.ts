@@ -37,13 +37,18 @@ export async function authMiddleware(
     return;
   }
 
-  const session = await getSession(sid);
-  if (!session?.user?.id) {
-    await clearSession(res, sid);
-    next();
-    return;
+  try {
+    const session = await getSession(sid);
+    if (!session?.user?.id) {
+      await clearSession(res, sid);
+      next();
+      return;
+    }
+
+    req.user = session.user;
+  } catch (err) {
+    console.error("Auth middleware session error:", err);
   }
 
-  req.user = session.user;
   next();
 }

@@ -54,6 +54,8 @@ export function LegRow({ leg, onRemove, onQuantityChange, editable, showLive }: 
             <Pressable
               style={styles.qtyBtn}
               onPress={() => onQuantityChange(Math.max(1, leg.quantity - 1))}
+              accessibilityLabel="Decrease quantity"
+              accessibilityRole="button"
             >
               <Feather name="minus" size={12} color={Colors.textSecondary} />
             </Pressable>
@@ -70,6 +72,8 @@ export function LegRow({ leg, onRemove, onQuantityChange, editable, showLive }: 
             <Pressable
               style={styles.qtyBtn}
               onPress={() => onQuantityChange(leg.quantity + 1)}
+              accessibilityLabel="Increase quantity"
+              accessibilityRole="button"
             >
               <Feather name="plus" size={12} color={Colors.textSecondary} />
             </Pressable>
@@ -81,7 +85,7 @@ export function LegRow({ leg, onRemove, onQuantityChange, editable, showLive }: 
         )}
 
         {onRemove ? (
-          <Pressable onPress={onRemove} style={styles.remove} hitSlop={8}>
+          <Pressable onPress={onRemove} style={styles.remove} hitSlop={8} accessibilityLabel="Remove leg" accessibilityRole="button">
             <Feather name="x" size={16} color={Colors.textMuted} />
           </Pressable>
         ) : null}

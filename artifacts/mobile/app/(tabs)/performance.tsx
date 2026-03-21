@@ -518,6 +518,8 @@ export default function PerformanceScreen() {
           style={[styles.exportBtn, !hasClosedTrades && styles.exportBtnDisabled]}
           onPress={handleExportPdf}
           disabled={!hasClosedTrades || exporting}
+          accessibilityLabel="Export performance report as PDF"
+          accessibilityRole="button"
         >
           {exporting ? (
             <ActivityIndicator size="small" color={Colors.accent} />
