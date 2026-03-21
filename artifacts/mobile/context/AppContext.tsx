@@ -134,9 +134,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!cleared) {
           try {
             const tradesJson = await AsyncStorage.getItem(TRADES_KEY);
-            if (tradesJson) setOpenTrades(JSON.parse(tradesJson));
+            if (tradesJson) {
+              try { setOpenTrades(JSON.parse(tradesJson)); } catch { await AsyncStorage.removeItem(TRADES_KEY); }
+            }
             const strategiesJson = await AsyncStorage.getItem(STRATEGIES_KEY);
-            if (strategiesJson) setSavedStrategies(JSON.parse(strategiesJson));
+            if (strategiesJson) {
+              try { setSavedStrategies(JSON.parse(strategiesJson)); } catch { await AsyncStorage.removeItem(STRATEGIES_KEY); }
+            }
           } catch (e) {
             console.error("Failed to load local data:", e);
           }
@@ -144,7 +148,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } else {
         try {
           const tradesJson = await AsyncStorage.getItem(TRADES_KEY);
-          if (tradesJson) setOpenTrades(JSON.parse(tradesJson));
+          if (tradesJson) {
+            try { setOpenTrades(JSON.parse(tradesJson)); } catch { await AsyncStorage.removeItem(TRADES_KEY); }
+          }
         } catch (e) {
           console.error("Failed to load trades:", e);
         }
@@ -174,8 +180,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const refreshStrategies = useCallback(async () => {
     if (!user) {
-      const strategiesJson = await AsyncStorage.getItem(STRATEGIES_KEY);
-      if (strategiesJson) setSavedStrategies(JSON.parse(strategiesJson));
+      try {
+        const strategiesJson = await AsyncStorage.getItem(STRATEGIES_KEY);
+        if (strategiesJson) setSavedStrategies(JSON.parse(strategiesJson));
+      } catch { }
       return;
     }
     try {
@@ -192,8 +200,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }));
       setSavedStrategies(mapped);
     } catch {
-      const strategiesJson = await AsyncStorage.getItem(STRATEGIES_KEY);
-      if (strategiesJson) setSavedStrategies(JSON.parse(strategiesJson));
+      try {
+        const strategiesJson = await AsyncStorage.getItem(STRATEGIES_KEY);
+        if (strategiesJson) setSavedStrategies(JSON.parse(strategiesJson));
+      } catch { }
     }
   }, [user]);
 
@@ -238,10 +248,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setOpenTrades([]);
   }, [authLogout]);
 
-  const persistTrades = useCallback(async (trades: OpenTrade[]) => {
-    await AsyncStorage.setItem(TRADES_KEY, JSON.stringify(trades));
-    setOpenTrades(trades);
-    if (!user) await touchGuestActivity();
+  const persistTrades = useCallback(async (updater: (prev: OpenTrade[]) => OpenTrade[]) => {
+    return new Promise<void>((resolve) => {
+      setOpenTrades((prev) => {
+        const next = updater(prev);
+        AsyncStorage.setItem(TRADES_KEY, JSON.stringify(next)).then(() => {
+          if (!user) touchGuestActivity();
+          resolve();
+        });
+        return next;
+      });
+    });
   }, [user]);
 
   const saveStrategy = useCallback(
@@ -269,9 +286,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
-      const updated = [...savedStrategies, newStrategy];
-      await AsyncStorage.setItem(STRATEGIES_KEY, JSON.stringify(updated));
-      setSavedStrategies(updated);
+      setSavedStrategies((prev) => {
+        const updated = [...prev, newStrategy];
+        AsyncStorage.setItem(STRATEGIES_KEY, JSON.stringify(updated));
+        return updated;
+      });
       if (!user) await touchGuestActivity();
       Analytics.track(AnalyticsEvents.BUILDER_STRATEGY_SAVED, {
         ticker: strategy.ticker,
@@ -279,36 +298,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         synced: false,
       });
     },
-    [user, savedStrategies, refreshStrategies]
+    [user, refreshStrategies]
   );
 
   const updateStrategy = useCallback(
     async (id: string, updates: Partial<SavedStrategy>) => {
-      const updated = savedStrategies.map((s) =>
-        s.id === id ? { ...s, ...updates, updatedAt: Date.now() } : s
-      );
-      await AsyncStorage.setItem(STRATEGIES_KEY, JSON.stringify(updated));
-      setSavedStrategies(updated);
+      setSavedStrategies((prev) => {
+        const updated = prev.map((s) =>
+          s.id === id ? { ...s, ...updates, updatedAt: Date.now() } : s
+        );
+        AsyncStorage.setItem(STRATEGIES_KEY, JSON.stringify(updated));
+        return updated;
+      });
       if (!user) await touchGuestActivity();
     },
-    [savedStrategies, user]
+    [user]
   );
 
   const deleteStrategy = useCallback(
     async (id: string) => {
-      const strategy = savedStrategies.find((s) => s.id === id);
-      if (strategy?.serverId && user) {
-        try { await api.deleteServerStrategy(strategy.serverId); } catch {}
+      let deletedStrategy: SavedStrategy | undefined;
+      setSavedStrategies((prev) => {
+        deletedStrategy = prev.find((s) => s.id === id);
+        const updated = prev.filter((s) => s.id !== id);
+        AsyncStorage.setItem(STRATEGIES_KEY, JSON.stringify(updated));
+        return updated;
+      });
+      if (deletedStrategy?.serverId && user) {
+        try { await api.deleteServerStrategy(deletedStrategy.serverId); } catch {}
       }
-      const updated = savedStrategies.filter((s) => s.id !== id);
-      await AsyncStorage.setItem(STRATEGIES_KEY, JSON.stringify(updated));
-      setSavedStrategies(updated);
       Analytics.track(AnalyticsEvents.PORTFOLIO_STRATEGY_DELETED, {
-        ticker: strategy?.ticker,
-        strategy_name: strategy?.name,
+        ticker: deletedStrategy?.ticker,
+        strategy_name: deletedStrategy?.name,
       });
     },
-    [savedStrategies, user]
+    [user]
   );
 
   const openTrade = useCallback(
@@ -318,64 +342,65 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
         status: "open",
       };
-      const updated = [...openTrades, newTrade];
-      await persistTrades(updated);
+      await persistTrades((prev) => [...prev, newTrade]);
       Analytics.track(AnalyticsEvents.BUILDER_TRADE_OPENED, {
         ticker: trade.ticker,
         strategy_name: trade.strategyName,
         entry_cost: trade.entryNetCost,
       });
     },
-    [openTrades, persistTrades]
+    [persistTrades]
   );
 
   const updateTrade = useCallback(
     async (tradeId: string, updates: Partial<OpenTrade>) => {
-      const updated = openTrades.map((t) =>
-        t.id === tradeId ? { ...t, ...updates } : t
+      await persistTrades((prev) =>
+        prev.map((t) => (t.id === tradeId ? { ...t, ...updates } : t))
       );
-      await persistTrades(updated);
       Analytics.track(AnalyticsEvents.TRADE_EDIT_SAVED, { trade_id: tradeId });
     },
-    [openTrades, persistTrades]
+    [persistTrades]
   );
 
   const closeTrade = useCallback(
     async (tradeId: string, exitValue: number) => {
-      const trade = openTrades.find((t) => t.id === tradeId);
-      const updated = openTrades.map((t) => {
-        if (t.id === tradeId) {
-          const realizedPnL = exitValue - t.entryNetCost;
-          return {
-            ...t,
-            status: "closed" as const,
-            closedAt: Date.now(),
-            exitValue,
-            realizedPnL,
-          };
-        }
-        return t;
-      });
-      await persistTrades(updated);
+      let closedTrade: OpenTrade | undefined;
+      await persistTrades((prev) =>
+        prev.map((t) => {
+          if (t.id === tradeId) {
+            closedTrade = t;
+            return {
+              ...t,
+              status: "closed" as const,
+              closedAt: Date.now(),
+              exitValue,
+              realizedPnL: exitValue - t.entryNetCost,
+            };
+          }
+          return t;
+        })
+      );
       Analytics.track(AnalyticsEvents.TRADE_CLOSE_LIVE, {
-        ticker: trade?.ticker,
-        realized_pnl: trade ? exitValue - trade.entryNetCost : 0,
+        ticker: closedTrade?.ticker,
+        realized_pnl: closedTrade ? exitValue - closedTrade.entryNetCost : 0,
       });
     },
-    [openTrades, persistTrades]
+    [persistTrades]
   );
 
   const deleteTrade = useCallback(
     async (tradeId: string) => {
-      const trade = openTrades.find((t) => t.id === tradeId);
-      const updated = openTrades.filter((t) => t.id !== tradeId);
-      await persistTrades(updated);
+      let deletedTrade: OpenTrade | undefined;
+      await persistTrades((prev) => {
+        deletedTrade = prev.find((t) => t.id === tradeId);
+        return prev.filter((t) => t.id !== tradeId);
+      });
       Analytics.track(AnalyticsEvents.TRADE_DELETED, {
-        ticker: trade?.ticker,
-        status: trade?.status,
+        ticker: deletedTrade?.ticker,
+        status: deletedTrade?.status,
       });
     },
-    [openTrades, persistTrades]
+    [persistTrades]
   );
 
   return (
