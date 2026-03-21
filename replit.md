@@ -40,9 +40,18 @@ artifacts-monorepo/
 
 - **Repo**: https://github.com/BMWeinstein7/Option-Viz-MOBILE
 - **Branch**: master
-- **Release**: v3.2.0
+- **Release**: v3.2.1
 
-### Release Notes — v3.2.0 (Current)
+### Release Notes — v3.2.1 (Current)
+
+#### Code Quality Refinements & Stability Fixes
+- **Race condition prevention** — all strategy/trade state updates use functional updaters (`setState(prev => ...)`) preventing data loss from rapid user actions
+- **Corrupt data recovery** — all JSON.parse calls on AsyncStorage wrapped in try/catch; corrupted data auto-cleared instead of crashing
+- **Auth route error handling** — register and login routes wrapped in try/catch with 500 responses on DB/bcrypt failures
+- **ErrorFallback Liquid Glass** — uses Colors constants instead of hardcoded hex values
+- **Shared formatting utilities** — `lib/format.ts` with `fmtMoney`, `fmtDollar`, `fmtPercent`, `fmtPrice`
+
+### Release Notes — v3.2.0
 
 #### Enhanced Trade Execution UI & Complete Documentation
 - **Two-tier trade button layout** — primary close actions (Close @ Live, Close Manual) as full-width stacked buttons; secondary actions (Edit, Delete) in a compact row below
