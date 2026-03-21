@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { View, StyleSheet } from "react-native";
+import React, { useMemo, useState } from "react";
+import { View, StyleSheet, LayoutChangeEvent } from "react-native";
 import Svg, {
   Path,
   Line,
@@ -33,9 +33,9 @@ interface PnLChartProps {
 const PAD = { top: 20, bottom: 40, left: 60, right: 20 };
 
 const TIME_COLORS = [
-  "rgba(56, 189, 248, 0.5)",
-  "rgba(167, 139, 250, 0.5)",
-  "rgba(251, 191, 36, 0.5)",
+  `rgba(56, 189, 248, 0.5)`,
+  `rgba(167, 139, 250, 0.5)`,
+  `rgba(251, 191, 36, 0.5)`,
 ];
 
 export function PnLChart({
@@ -45,7 +45,14 @@ export function PnLChart({
   height = 220,
   timeDecayCurves = [],
 }: PnLChartProps) {
-  const width = 340;
+  const [layoutWidth, setLayoutWidth] = useState(340);
+
+  const handleLayout = (e: LayoutChangeEvent) => {
+    const w = Math.floor(e.nativeEvent.layout.width);
+    if (w > 0 && w !== layoutWidth) setLayoutWidth(w);
+  };
+
+  const width = layoutWidth;
 
   const { minPrice, maxPrice, minPnl, maxPnl } = useMemo(() => {
     const allPnls = [...data.map((d) => d.pnl)];
@@ -127,7 +134,7 @@ export function PnLChart({
   const yLabels = [minPnl, 0, maxPnl].filter((v) => v !== 0);
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={handleLayout}>
       <Svg width={width} height={height}>
         <Defs>
           <LinearGradient id="profitGrad" x1="0" y1="0" x2="0" y2="1">
@@ -148,7 +155,7 @@ export function PnLChart({
           y1={zeroY}
           x2={PAD.left + chartW}
           y2={zeroY}
-          stroke="rgba(255,255,255,0.08)"
+          stroke={Colors.glassBorder}
           strokeWidth={1}
           strokeDasharray="4,4"
         />
@@ -275,6 +282,7 @@ export function PnLChart({
 
 const styles = StyleSheet.create({
   container: {
+    width: "100%",
     alignItems: "center",
     overflow: "hidden",
   },

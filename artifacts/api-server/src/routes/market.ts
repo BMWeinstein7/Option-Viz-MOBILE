@@ -10,9 +10,17 @@ import {
 
 const router: IRouter = Router();
 
+const TICKER_RE = /^[A-Za-z.]{1,10}$/;
+
+function sanitizeTicker(raw: string): string | null {
+  const trimmed = raw.trim().toUpperCase();
+  return TICKER_RE.test(trimmed) ? trimmed : null;
+}
+
 router.get("/market/quote/:ticker", async (req, res) => {
   try {
-    const { ticker } = req.params;
+    const ticker = sanitizeTicker(req.params.ticker);
+    if (!ticker) { res.status(400).json({ error: "BAD_REQUEST", message: "Invalid ticker format" }); return; }
     const quote = await fetchStockQuote(ticker);
     res.json(quote);
   } catch (error) {
@@ -27,7 +35,11 @@ router.post("/market/batch-quotes", async (req, res) => {
       res.status(400).json({ error: "BAD_REQUEST", message: "tickers array required" });
       return;
     }
-    const quotes = await fetchBatchQuotes(tickers.slice(0, 100));
+    const clean = tickers
+      .slice(0, 100)
+      .filter((t): t is string => typeof t === "string" && TICKER_RE.test(t.trim()))
+      .map((t) => t.trim().toUpperCase());
+    const quotes = await fetchBatchQuotes(clean);
     res.json({ quotes });
   } catch (error) {
     res.status(500).json({ error: "SERVER_ERROR", message: "Failed to fetch batch quotes" });
@@ -36,9 +48,10 @@ router.post("/market/batch-quotes", async (req, res) => {
 
 router.get("/market/expirations/:ticker", async (req, res) => {
   try {
-    const { ticker } = req.params;
+    const ticker = sanitizeTicker(req.params.ticker);
+    if (!ticker) { res.status(400).json({ error: "BAD_REQUEST", message: "Invalid ticker format" }); return; }
     const expirations = await fetchOptionExpirations(ticker);
-    res.json({ ticker: ticker.toUpperCase(), expirations });
+    res.json({ ticker, expirations });
   } catch (error) {
     res.status(404).json({ error: "NOT_FOUND", message: "Could not fetch expirations" });
   }
@@ -46,10 +59,15 @@ router.get("/market/expirations/:ticker", async (req, res) => {
 
 router.get("/market/chain/:ticker/:expiration", async (req, res) => {
   try {
-    const { ticker, expiration } = req.params;
+    const ticker = sanitizeTicker(req.params.ticker);
+    if (!ticker) { res.status(400).json({ error: "BAD_REQUEST", message: "Invalid ticker format" }); return; }
+    const expiration = req.params.expiration;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(expiration) || isNaN(Date.parse(expiration))) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "Invalid expiration date format (YYYY-MM-DD)" }); return;
+    }
     const chain = await fetchOptionsChain(ticker, expiration);
     res.json({
-      ticker: ticker.toUpperCase(),
+      ticker,
       expiration,
       spotPrice: chain.spotPrice,
       calls: chain.calls,
@@ -62,9 +80,10 @@ router.get("/market/chain/:ticker/:expiration", async (req, res) => {
 
 router.get("/market/flow/:ticker", async (req, res) => {
   try {
-    const { ticker } = req.params;
+    const ticker = sanitizeTicker(req.params.ticker);
+    if (!ticker) { res.status(400).json({ error: "BAD_REQUEST", message: "Invalid ticker format" }); return; }
     const flow = await fetchOptionsFlow(ticker);
-    res.json({ ticker: ticker.toUpperCase(), flow });
+    res.json({ ticker, flow });
   } catch (error) {
     res.status(500).json({ error: "SERVER_ERROR", message: "Could not fetch options flow" });
   }
@@ -72,16 +91,18 @@ router.get("/market/flow/:ticker", async (req, res) => {
 
 router.get("/market/pcr/:ticker", async (req, res) => {
   try {
-    const { ticker } = req.params;
+    const ticker = sanitizeTicker(req.params.ticker);
+    if (!ticker) { res.status(400).json({ error: "BAD_REQUEST", message: "Invalid ticker format" }); return; }
     const pcr = await fetchPutCallRatio(ticker);
-    res.json({ ticker: ticker.toUpperCase(), ...pcr });
+    res.json({ ticker, ...pcr });
   } catch (error) {
     res.status(500).json({ error: "SERVER_ERROR", message: "Could not fetch put/call ratio" });
   }
 });
 
 router.get("/market/stream/:ticker", (req: Request, res: Response) => {
-  const { ticker } = req.params;
+  const ticker = sanitizeTicker(req.params.ticker);
+  if (!ticker) { res.status(400).json({ error: "BAD_REQUEST", message: "Invalid ticker format" }); return; }
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");

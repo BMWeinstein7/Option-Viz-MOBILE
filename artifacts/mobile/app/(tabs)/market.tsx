@@ -113,7 +113,13 @@ function LiveQuoteDetail({ ticker }: { ticker: string }) {
   const streamed = useStreamingQuote(ticker, true);
   const data = streamed || polled.data;
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <View style={styles.liveDetail}>
+        <ActivityIndicator color={Colors.accent} style={{ marginVertical: 20 }} />
+      </View>
+    );
+  }
 
   const isUp = data.change >= 0;
   const fmtVol = (n: number) => {
@@ -278,6 +284,9 @@ export default function MarketScreen() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setView(v);
               }}
+              accessibilityLabel={v === "quotes" ? "Live Quotes" : v === "chain" ? "Options Chain" : "Options Flow"}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: view === v }}
             >
               <Text style={[styles.segmentText, view === v && styles.segmentTextActive]}>
                 {v === "quotes" ? "Live Quotes" : v === "chain" ? "Chain" : "Flow"}
@@ -300,7 +309,7 @@ export default function MarketScreen() {
               onSubmitEditing={handleTickerSearch}
               returnKeyType="search"
             />
-            <Pressable style={styles.searchBarBtn} onPress={handleTickerSearch}>
+            <Pressable style={styles.searchBarBtn} onPress={handleTickerSearch} accessibilityLabel="Search ticker" accessibilityRole="button">
               <Feather name="search" size={16} color={Colors.bg} />
             </Pressable>
           </View>
@@ -347,7 +356,7 @@ export default function MarketScreen() {
               onSubmitEditing={handleChainSearch}
               returnKeyType="search"
             />
-            <Pressable style={styles.chainSearchBtn} onPress={handleChainSearch}>
+            <Pressable style={styles.chainSearchBtn} onPress={handleChainSearch} accessibilityLabel="Search chain ticker" accessibilityRole="button">
               <Feather name="search" size={16} color={Colors.bg} />
             </Pressable>
           </View>
@@ -371,6 +380,9 @@ export default function MarketScreen() {
                     key={exp}
                     style={[styles.expChip, activeExp === exp && styles.expChipSelected]}
                     onPress={() => setSelectedExp(exp)}
+                    accessibilityLabel={`Expiration ${exp}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: activeExp === exp }}
                   >
                     <Text style={[styles.expChipText, activeExp === exp && styles.expChipTextSelected]}>
                       {exp}
@@ -390,6 +402,9 @@ export default function MarketScreen() {
                   borderColor: t === "calls" ? Colors.accent + "40" : Colors.red + "40",
                 }]}
                 onPress={() => setChainTab(t)}
+                accessibilityLabel={t === "calls" ? "Show calls" : "Show puts"}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: chainTab === t }}
               >
                 <Text style={[styles.callsPutsText, chainTab === t && { color: t === "calls" ? Colors.accent : Colors.red }]}>
                   {t === "calls" ? "Calls" : "Puts"}
@@ -448,7 +463,7 @@ export default function MarketScreen() {
               onSubmitEditing={handleFlowSearch}
               returnKeyType="search"
             />
-            <Pressable style={styles.chainSearchBtn} onPress={handleFlowSearch}>
+            <Pressable style={styles.chainSearchBtn} onPress={handleFlowSearch} accessibilityLabel="Search flow ticker" accessibilityRole="button">
               <Feather name="search" size={16} color={Colors.bg} />
             </Pressable>
           </View>

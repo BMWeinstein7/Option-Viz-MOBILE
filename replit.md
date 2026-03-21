@@ -40,9 +40,42 @@ artifacts-monorepo/
 
 - **Repo**: https://github.com/BMWeinstein7/Option-Viz-MOBILE
 - **Branch**: master
-- **Release**: v3.1.0
+- **Release**: v3.3.0
 
-### Release Notes — v3.1.0 (Current)
+### Release Notes — v3.3.0 (Current)
+
+#### Security, Accessibility & Responsive Enhancements
+- **Ticker input sanitization** — all 7 market routes + SSE stream validate tickers via `sanitizeTicker` regex (`/^[A-Za-z.]{1,10}$/`); rejects invalid formats with 400 BAD_REQUEST
+- **Batch quote hardening** — batch-quotes route now filters non-string array elements before processing, preventing `toUpperCase()` crashes on malformed payloads
+- **Expiration date validation** — chain route validates `YYYY-MM-DD` format via regex + `Date.parse` guard
+- **Strategy input validation** — POST strategies validates ticker format and ensures at least one leg is provided
+- **authMiddleware try/catch** — `getSession` and `clearSession` DB calls wrapped in try/catch preventing server crashes on DB connection failures
+- **Responsive PnL chart** — replaced hardcoded 340px width with `onLayout` + `useState` for fluid sizing on all screen widths; container uses `width: "100%"`
+- **Accessibility labels** — added `accessibilityLabel` and `accessibilityRole` to all interactive elements: LegRow qty buttons, remove button, segment tabs, search buttons, ticker chips, expiration chips, calls/puts toggle, export PDF button
+- **LiveQuoteDetail loading state** — shows spinner placeholder instead of blank space while quote data loads
+- **Shared formatting** — replaced duplicate `fmtMoney` in builder with import from shared `lib/format.ts`
+- **Zero-line color fix** — PnL chart zero-line now uses `Colors.glassBorder` instead of hardcoded `rgba(255,255,255,0.08)`
+
+### Release Notes — v3.2.1
+
+#### Code Quality Refinements & Stability Fixes
+- **Race condition prevention** — all strategy/trade state updates use functional updaters (`setState(prev => ...)`) preventing data loss from rapid user actions
+- **Corrupt data recovery** — all JSON.parse calls on AsyncStorage wrapped in try/catch; corrupted data auto-cleared instead of crashing
+- **Auth route error handling** — register and login routes wrapped in try/catch with 500 responses on DB/bcrypt failures
+- **ErrorFallback Liquid Glass** — uses Colors constants instead of hardcoded hex values
+- **Shared formatting utilities** — `lib/format.ts` with `fmtMoney`, `fmtDollar`, `fmtPercent`, `fmtPrice`
+
+### Release Notes — v3.2.0
+
+#### Enhanced Trade Execution UI & Complete Documentation
+- **Two-tier trade button layout** — primary close actions (Close @ Live, Close Manual) as full-width stacked buttons; secondary actions (Edit, Delete) in a compact row below
+- **Close @ Live text fix** — label and dollar value split into separate text elements preventing overflow/clipping
+- **Full-width button guarantee** — `alignSelf: "stretch"` on primary buttons for consistent rendering across all devices
+- **Delete button label** — now includes "Delete" text label alongside trash icon
+- **Complete README** — full rewrite with screenshots, design system, tech stack, architecture, all API endpoints, analytics events
+- **Design spec** — `docs/DESIGN_SPEC.md` with every color, typography, spacing, corner radius, and per-screen layout
+
+### Release Notes — v3.1.0
 
 #### Email/Password Authentication & Guest Session Management
 - **Email/password auth** — bcryptjs (12 salt rounds) register/login/logout with server-side sessions
