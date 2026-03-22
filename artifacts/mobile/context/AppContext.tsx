@@ -58,6 +58,18 @@ export interface OpenTrade {
   legs: TradeLeg[];
 }
 
+export interface BuilderIntent {
+  ticker: string;
+  optionType?: "call" | "put";
+}
+
+export interface PortfolioPosition {
+  id: string;
+  ticker: string;
+  shares: number;
+  avgCost: number;
+}
+
 interface AppContextType {
   user: AuthUser | null;
   isAuthLoading: boolean;
@@ -75,12 +87,22 @@ interface AppContextType {
   deleteTrade: (tradeId: string) => Promise<void>;
   refreshStrategies: () => Promise<void>;
   isLoaded: boolean;
+  builderIntent: BuilderIntent | null;
+  setBuilderIntent: (intent: BuilderIntent | null) => void;
+  accountBalance: number;
+  setAccountBalance: (balance: number) => Promise<void>;
+  positions: PortfolioPosition[];
+  addPosition: (pos: Omit<PortfolioPosition, "id">) => Promise<void>;
+  updatePosition: (id: string, updates: Partial<PortfolioPosition>) => Promise<void>;
+  deletePosition: (id: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
 
 const STRATEGIES_KEY = "optionviz_strategies";
 const TRADES_KEY = "optionviz_trades";
+const BALANCE_KEY = "optionviz_account_balance";
+const POSITIONS_KEY = "optionviz_positions";
 const GUEST_LAST_ACTIVE_KEY = "optionviz_guest_last_active";
 const GUEST_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -91,7 +113,7 @@ async function checkAndClearGuestData(): Promise<boolean> {
 
     const elapsed = Date.now() - parseInt(lastActive, 10);
     if (elapsed >= GUEST_TIMEOUT_MS) {
-      await AsyncStorage.multiRemove([STRATEGIES_KEY, TRADES_KEY, GUEST_LAST_ACTIVE_KEY]);
+      await AsyncStorage.multiRemove([STRATEGIES_KEY, TRADES_KEY, BALANCE_KEY, POSITIONS_KEY, GUEST_LAST_ACTIVE_KEY]);
       Analytics.track(AnalyticsEvents.GUEST_SESSION_EXPIRED, {
         elapsed_minutes: Math.round(elapsed / 60000),
       });
@@ -118,6 +140,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [savedStrategies, setSavedStrategies] = useState<SavedStrategy[]>([]);
   const [openTrades, setOpenTrades] = useState<OpenTrade[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [builderIntent, setBuilderIntent] = useState<BuilderIntent | null>(null);
+  const [accountBalance, setAccountBalanceState] = useState<number>(0);
+  const [positions, setPositions] = useState<PortfolioPosition[]>([]);
 
   const user: AuthUser | null = authUser ? {
     id: authUser.id,
@@ -129,6 +154,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const load = async () => {
+      try {
+        const balanceJson = await AsyncStorage.getItem(BALANCE_KEY);
+        if (balanceJson) setAccountBalanceState(parseFloat(balanceJson) || 0);
+        const positionsJson = await AsyncStorage.getItem(POSITIONS_KEY);
+        if (positionsJson) {
+          try { setPositions(JSON.parse(positionsJson)); } catch { await AsyncStorage.removeItem(POSITIONS_KEY); }
+        }
+      } catch {}
+
       if (!user) {
         const cleared = await checkAndClearGuestData();
         if (!cleared) {
@@ -403,6 +437,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [persistTrades]
   );
 
+  const setAccountBalance = useCallback(async (balance: number) => {
+    setAccountBalanceState(balance);
+    await AsyncStorage.setItem(BALANCE_KEY, String(balance));
+  }, []);
+
+  const addPosition = useCallback(async (pos: Omit<PortfolioPosition, "id">) => {
+    const newPos: PortfolioPosition = {
+      ...pos,
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
+    };
+    setPositions((prev) => {
+      const updated = [...prev, newPos];
+      AsyncStorage.setItem(POSITIONS_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const updatePosition = useCallback(async (id: string, updates: Partial<PortfolioPosition>) => {
+    setPositions((prev) => {
+      const updated = prev.map((p) => (p.id === id ? { ...p, ...updates } : p));
+      AsyncStorage.setItem(POSITIONS_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const deletePosition = useCallback(async (id: string) => {
+    setPositions((prev) => {
+      const updated = prev.filter((p) => p.id !== id);
+      AsyncStorage.setItem(POSITIONS_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
   return (
     <AppContext.Provider
       value={{
@@ -422,6 +489,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteTrade,
         refreshStrategies,
         isLoaded,
+        builderIntent,
+        setBuilderIntent,
+        accountBalance,
+        setAccountBalance,
+        positions,
+        addPosition,
+        updatePosition,
+        deletePosition,
       }}
     >
       {children}

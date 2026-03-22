@@ -15,8 +15,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
-import { STRATEGY_TEMPLATES, OUTLOOK_COLORS, OUTLOOK_LABELS, POPULAR_TICKERS } from "@/constants/strategies";
-import { api, StrategyAnalysis, OptionContract } from "@/hooks/useApi";
+import { STRATEGY_TEMPLATES, OUTLOOK_COLORS, OUTLOOK_LABELS } from "@/constants/strategies";
+import { api, StrategyAnalysis, OptionContract, StockQuote } from "@/hooks/useApi";
 import { PnLChart } from "@/components/PnLChart";
 import { MetricCard } from "@/components/MetricCard";
 import { LegRow, Leg } from "@/components/LegRow";
@@ -25,6 +25,48 @@ import { ProfileButton } from "@/components/ProfileMenu";
 import { useAppContext, TradeLeg } from "@/context/AppContext";
 import { Analytics, AnalyticsEvents } from "@/lib/analytics";
 import { fmtMoney } from "@/lib/format";
+import { calculateMargin } from "@/lib/marginCalc";
+
+const MOST_ACTIVE = ["SPY", "AAPL", "TSLA", "NVDA", "AMD", "MSFT", "QQQ", "META", "AMZN", "GOOGL"];
+
+function MostActiveRow({ ticker, onSelect }: { ticker: string; onSelect: () => void }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["quote", ticker],
+    queryFn: () => api.getQuote(ticker),
+    refetchInterval: 4000,
+    staleTime: 3000,
+  });
+
+  if (isLoading || !data) {
+    return (
+      <Pressable style={styles.activeRow} onPress={onSelect} accessibilityLabel={`Select ${ticker}`} accessibilityRole="button">
+        <Text style={styles.activeRowTicker}>{ticker}</Text>
+        <ActivityIndicator size="small" color={Colors.textMuted} />
+      </Pressable>
+    );
+  }
+
+  const isUp = data.change >= 0;
+
+  return (
+    <Pressable style={styles.activeRow} onPress={onSelect} accessibilityLabel={`Select ${data.ticker} at $${data.price.toFixed(2)}`} accessibilityRole="button">
+      <View style={styles.activeRowLeft}>
+        <Text style={styles.activeRowTicker}>{data.ticker}</Text>
+        <Text style={styles.activeRowName} numberOfLines={1}>{data.name}</Text>
+      </View>
+      <View style={styles.activeRowRight}>
+        <Text style={styles.activeRowPrice}>${data.price.toFixed(2)}</Text>
+        <View style={[styles.activeRowChip, { backgroundColor: isUp ? Colors.accentDim : Colors.redDim }]}>
+          <Feather name={isUp ? "trending-up" : "trending-down"} size={10} color={isUp ? Colors.accent : Colors.red} />
+          <Text style={[styles.activeRowChg, { color: isUp ? Colors.accent : Colors.red }]}>
+            {isUp ? "+" : ""}{data.changePercent.toFixed(2)}%
+          </Text>
+        </View>
+      </View>
+      <Feather name="chevron-right" size={16} color={Colors.textMuted} style={{ marginLeft: 8 }} />
+    </Pressable>
+  );
+}
 
 type BuilderStep = "ticker" | "template" | "legs" | "analysis";
 
@@ -38,7 +80,7 @@ function findClosestContract(contracts: OptionContract[], strike: number): Optio
 
 export default function BuilderScreen() {
   const insets = useSafeAreaInsets();
-  const { saveStrategy, openTrade, savedStrategies } = useAppContext();
+  const { saveStrategy, openTrade, savedStrategies, builderIntent, setBuilderIntent, accountBalance } = useAppContext();
 
   const [step, setStep] = useState<BuilderStep>("ticker");
   const [ticker, setTicker] = useState("");
@@ -98,6 +140,53 @@ export default function BuilderScreen() {
       })
     );
   }, [chain]);
+
+  useEffect(() => {
+    if (builderIntent) {
+      const t = builderIntent.ticker.toUpperCase();
+      setTicker(t);
+      setTickerInput(t);
+      if (builderIntent.optionType) {
+        const templateId = builderIntent.optionType === "call" ? "long_call" : "long_put";
+        const template = STRATEGY_TEMPLATES.find((s) => s.id === templateId);
+        if (template) {
+          setSelectedTemplateId(templateId);
+          setLegs(template.legs.map((l, i) => ({ ...l, id: `intent-${i}` })));
+          setStep("legs");
+        } else {
+          setStep("template");
+        }
+      } else {
+        setStep("template");
+      }
+      setBuilderIntent(null);
+    }
+  }, [builderIntent, setBuilderIntent]);
+
+  const handleBack = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (step === "analysis") setStep("legs");
+    else if (step === "legs") setStep("template");
+    else if (step === "template") {
+      setStep("ticker");
+      setTicker("");
+      setTickerInput("");
+    }
+  }, [step]);
+
+  const marginResult = useMemo(() => {
+    if (legs.length === 0 || !quote) return null;
+    return calculateMargin(
+      legs.map((l) => ({
+        action: l.action,
+        type: l.type,
+        strike: l.strike,
+        premium: l.liveMid ?? l.premium,
+        quantity: l.quantity,
+      })),
+      quote.price
+    );
+  }, [legs, quote]);
 
   const analyzeMutation = useMutation({
     mutationFn: () =>
@@ -377,11 +466,18 @@ export default function BuilderScreen() {
   return (
     <View style={[styles.root, { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) }]}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Strategy Builder</Text>
-          {ticker ? (
-            <Text style={styles.headerSub}>{ticker} · ${quote?.price?.toFixed(2) ?? "..."}</Text>
-          ) : null}
+        <View style={styles.headerLeft}>
+          {step !== "ticker" && (
+            <Pressable onPress={handleBack} style={styles.backBtn} accessibilityLabel="Go back" accessibilityRole="button">
+              <Feather name="arrow-left" size={18} color={Colors.textPrimary} />
+            </Pressable>
+          )}
+          <View>
+            <Text style={styles.headerTitle}>Strategy Builder</Text>
+            {ticker ? (
+              <Text style={styles.headerSub}>{ticker} · ${quote?.price?.toFixed(2) ?? "..."}</Text>
+            ) : null}
+          </View>
         </View>
         <View style={styles.headerRight}>
           {step !== "ticker" ? (
@@ -403,7 +499,7 @@ export default function BuilderScreen() {
         {step === "ticker" && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Choose Any Stock</Text>
-            <Text style={styles.sectionHint}>Enter any US ticker symbol</Text>
+            <Text style={styles.sectionHint}>Enter any US ticker or pick from the most active</Text>
 
             <View style={styles.searchRow}>
               <TextInput
@@ -421,12 +517,16 @@ export default function BuilderScreen() {
               </Pressable>
             </View>
 
-            <Text style={styles.sectionLabel}>Popular</Text>
-            <View style={styles.tickerGrid}>
-              {POPULAR_TICKERS.slice(0, 30).map((t) => (
-                <Pressable key={t} style={({ pressed }) => [styles.tickerChip, pressed && styles.tickerChipPressed]} onPress={() => handleTickerSelect(t)} accessibilityLabel={`Select ${t}`} accessibilityRole="button">
-                  <Text style={styles.tickerChipText}>{t}</Text>
-                </Pressable>
+            <View style={styles.activeHeader}>
+              <Feather name="activity" size={14} color={Colors.accent} />
+              <Text style={styles.activeHeaderText}>Most Active</Text>
+            </View>
+            <View style={styles.activeList}>
+              {MOST_ACTIVE.map((t, i) => (
+                <View key={t}>
+                  {i > 0 && <View style={styles.activeSeparator} />}
+                  <MostActiveRow ticker={t} onSelect={() => handleTickerSelect(t)} />
+                </View>
               ))}
             </View>
           </View>
@@ -526,6 +626,28 @@ export default function BuilderScreen() {
                   ${Math.abs(netDebitCredit).toFixed(0)}
                 </Text>
                 <Text style={styles.costHint}>Using live midpoint prices</Text>
+              </View>
+            )}
+
+            {marginResult && (
+              <View style={styles.marginCard}>
+                <View style={styles.marginHeader}>
+                  <Feather name="shield" size={14} color={Colors.blue} />
+                  <Text style={styles.marginTitle}>Margin Requirement</Text>
+                  <View style={[styles.marginTypeBadge, { backgroundColor: marginResult.type === "Naked" ? Colors.redDim : marginResult.type === "Debit" ? Colors.accentDim : Colors.blueDim }]}>
+                    <Text style={[styles.marginTypeText, { color: marginResult.type === "Naked" ? Colors.red : marginResult.type === "Debit" ? Colors.accent : Colors.blue }]}>{marginResult.type}</Text>
+                  </View>
+                </View>
+                <Text style={styles.marginValue}>${marginResult.requirement.toLocaleString()}</Text>
+                <Text style={styles.marginDesc}>{marginResult.description}</Text>
+                {accountBalance > 0 && (
+                  <View style={styles.marginBalanceRow}>
+                    <Text style={styles.marginBalanceLabel}>Impact on Balance</Text>
+                    <Text style={[styles.marginBalanceValue, { color: marginResult.requirement <= accountBalance ? Colors.accent : Colors.red }]}>
+                      {((marginResult.requirement / accountBalance) * 100).toFixed(1)}% of ${accountBalance.toLocaleString()}
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
 
@@ -680,6 +802,13 @@ export default function BuilderScreen() {
               <MetricCard label="Risk/Reward" value={analysis.riskRewardRatio != null ? `${analysis.riskRewardRatio.toFixed(2)}x` : "N/A"} color={Colors.blue} />
             </View>
 
+            {marginResult && (
+              <View style={styles.metricsRow}>
+                <MetricCard label="Margin Req" value={`$${marginResult.requirement.toLocaleString()}`} color={Colors.blue} />
+                <MetricCard label="Margin Type" value={marginResult.type} color={marginResult.type === "Naked" ? Colors.red : Colors.accent} />
+              </View>
+            )}
+
             {analysis.breakEvenPoints.length > 0 && (
               <View style={styles.breakEvenCard}>
                 <Text style={styles.breakEvenLabel}>Break-even Points</Text>
@@ -720,6 +849,8 @@ export default function BuilderScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 12, paddingTop: 8 },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  backBtn: { padding: 6, backgroundColor: Colors.glassElevated, borderRadius: 10, borderWidth: 1, borderColor: Colors.glassBorder },
   headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold", color: Colors.textPrimary },
   headerSub: { fontSize: 13, color: Colors.textSecondary, fontFamily: "Inter_400Regular", marginTop: 2 },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 10 },
@@ -735,10 +866,18 @@ const styles = StyleSheet.create({
   searchRow: { flexDirection: "row", gap: 10 },
   input: { flex: 1, backgroundColor: Colors.bgCard, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, color: Colors.textPrimary, fontFamily: "Inter_500Medium", fontSize: 15, borderWidth: 1, borderColor: Colors.glassBorder },
   searchBtn: { backgroundColor: Colors.accent, borderRadius: 14, paddingHorizontal: 16, justifyContent: "center" },
-  tickerGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  tickerChip: { backgroundColor: Colors.glassElevated, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: Colors.glassBorder },
-  tickerChipPressed: { backgroundColor: Colors.accentDim, borderColor: Colors.accent + "40" },
-  tickerChipText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.textPrimary },
+  activeHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
+  activeHeaderText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.accent },
+  activeList: { backgroundColor: Colors.glassElevated, borderRadius: 16, borderWidth: 1, borderColor: Colors.glassBorder, overflow: "hidden" },
+  activeRow: { flexDirection: "row", alignItems: "center", paddingVertical: 14, paddingHorizontal: 16 },
+  activeRowLeft: { flex: 1 },
+  activeRowTicker: { fontSize: 15, fontFamily: "Inter_700Bold", color: Colors.textPrimary },
+  activeRowName: { fontSize: 11, color: Colors.textMuted, fontFamily: "Inter_400Regular", marginTop: 2, maxWidth: 140 },
+  activeRowRight: { alignItems: "flex-end", gap: 4 },
+  activeRowPrice: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: Colors.textPrimary },
+  activeRowChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  activeRowChg: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  activeSeparator: { height: 1, backgroundColor: Colors.glassBorder, marginHorizontal: 16 },
   quoteCard: { backgroundColor: Colors.glassElevated, borderRadius: 16, padding: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderWidth: 1, borderColor: Colors.glassBorder },
   quoteName: { fontSize: 13, color: Colors.textSecondary, fontFamily: "Inter_400Regular", marginBottom: 4 },
   quotePrice: { fontSize: 24, fontFamily: "Inter_700Bold", color: Colors.textPrimary },
@@ -817,4 +956,14 @@ const styles = StyleSheet.create({
   tradeBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.blue },
   newBtn: { flex: 0.7, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.glassElevated, borderRadius: 14, paddingVertical: 16, borderWidth: 1, borderColor: Colors.glassBorder },
   newBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.textSecondary },
+  marginCard: { backgroundColor: Colors.glassElevated, borderRadius: 14, padding: 14, gap: 8, borderWidth: 1, borderColor: Colors.glassBorder },
+  marginHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  marginTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.textSecondary, flex: 1 },
+  marginTypeBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  marginTypeText: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
+  marginValue: { fontSize: 22, fontFamily: "Inter_700Bold", color: Colors.blue },
+  marginDesc: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textMuted },
+  marginBalanceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 6, borderTopWidth: 1, borderTopColor: Colors.glassBorder },
+  marginBalanceLabel: { fontSize: 11, fontFamily: "Inter_500Medium", color: Colors.textMuted },
+  marginBalanceValue: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
 });

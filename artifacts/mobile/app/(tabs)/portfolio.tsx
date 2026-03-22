@@ -16,9 +16,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
-import { useAppContext, SavedStrategy, OpenTrade, TradeLeg } from "@/context/AppContext";
+import { useAppContext, SavedStrategy, OpenTrade, TradeLeg, PortfolioPosition } from "@/context/AppContext";
 import { Analytics, AnalyticsEvents } from "@/lib/analytics";
-import { api, OptionsChain } from "@/hooks/useApi";
+import { api, OptionsChain, StockQuote } from "@/hooks/useApi";
 import { LegRow } from "@/components/LegRow";
 import { PnLChart } from "@/components/PnLChart";
 import { MetricCard } from "@/components/MetricCard";
@@ -72,6 +72,34 @@ function useLivePnL(trade: OpenTrade) {
 
   const unrealizedPnL = currentValue - trade.entryNetCost;
   return { currentValue, unrealizedPnL, legs: updatedLegs };
+}
+
+function PositionRow({ position, quote }: { position: PortfolioPosition; quote?: StockQuote | null }) {
+  const currentValue = quote ? quote.price * position.shares : null;
+  const costBasis = position.avgCost * position.shares;
+  const pnl = currentValue != null ? currentValue - costBasis : null;
+  const pnlPct = pnl != null && costBasis > 0 ? (pnl / costBasis) * 100 : null;
+
+  return (
+    <View style={styles.posRow}>
+      <View style={styles.posLeft}>
+        <Text style={styles.posTicker}>{position.ticker}</Text>
+        <Text style={styles.posShares}>{position.shares} shares @ ${position.avgCost.toFixed(2)}</Text>
+      </View>
+      <View style={styles.posRight}>
+        {currentValue != null ? (
+          <>
+            <Text style={styles.posValue}>${currentValue.toFixed(0)}</Text>
+            <Text style={[styles.posPnl, { color: (pnl ?? 0) >= 0 ? Colors.accent : Colors.red }]}>
+              {(pnl ?? 0) >= 0 ? "+" : ""}${(pnl ?? 0).toFixed(0)} ({(pnlPct ?? 0).toFixed(1)}%)
+            </Text>
+          </>
+        ) : (
+          <ActivityIndicator size="small" color={Colors.textMuted} />
+        )}
+      </View>
+    </View>
+  );
 }
 
 function PerformanceDashboard({ trades, timeframe, onTimeframeChange }: {
@@ -576,7 +604,64 @@ export default function PortfolioScreen() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<PortfolioTab>("dashboard");
   const [timeframe, setTimeframe] = useState<Timeframe>("ALL");
-  const { user, savedStrategies, openTrades, deleteStrategy, openTrade, deleteTrade } = useAppContext();
+  const { user, savedStrategies, openTrades, deleteStrategy, openTrade, deleteTrade, accountBalance, setAccountBalance, positions, addPosition, deletePosition } = useAppContext();
+  const [showBalanceEdit, setShowBalanceEdit] = useState(false);
+  const [balanceInput, setBalanceInput] = useState("");
+  const [showAddPosition, setShowAddPosition] = useState(false);
+  const [newPosTicker, setNewPosTicker] = useState("");
+  const [newPosShares, setNewPosShares] = useState("");
+  const [newPosCost, setNewPosCost] = useState("");
+
+  const positionTickers = useMemo(() => positions.map((p) => p.ticker), [positions]);
+  const { data: posQuotes } = useQuery({
+    queryKey: ["batch-quotes", positionTickers.join(",")],
+    queryFn: () => api.getBatchQuotes(positionTickers),
+    enabled: positionTickers.length > 0,
+    refetchInterval: 5000,
+    staleTime: 3000,
+  });
+
+  const quoteMap = useMemo(() => {
+    const m: Record<string, StockQuote> = {};
+    if (posQuotes?.quotes) {
+      for (const q of posQuotes.quotes) m[q.ticker] = q;
+    }
+    return m;
+  }, [posQuotes]);
+
+  const totalPositionValue = useMemo(() => {
+    return positions.reduce((s, p) => {
+      const q = quoteMap[p.ticker];
+      return s + (q ? q.price * p.shares : p.avgCost * p.shares);
+    }, 0);
+  }, [positions, quoteMap]);
+
+  const handleSaveBalance = useCallback(() => {
+    const val = parseFloat(balanceInput);
+    if (isNaN(val) || val < 0) {
+      Alert.alert("Invalid", "Enter a valid balance");
+      return;
+    }
+    setAccountBalance(val);
+    setShowBalanceEdit(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [balanceInput, setAccountBalance]);
+
+  const handleAddPosition = useCallback(() => {
+    const ticker = newPosTicker.trim().toUpperCase();
+    const shares = parseInt(newPosShares);
+    const cost = parseFloat(newPosCost);
+    if (!ticker || isNaN(shares) || shares <= 0 || isNaN(cost) || cost <= 0) {
+      Alert.alert("Invalid", "Enter valid ticker, shares, and average cost");
+      return;
+    }
+    addPosition({ ticker, shares, avgCost: cost });
+    setNewPosTicker("");
+    setNewPosShares("");
+    setNewPosCost("");
+    setShowAddPosition(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [newPosTicker, newPosShares, newPosCost, addPosition]);
 
   const handleOpenTradeFromStrategy = useCallback(async (strategy: SavedStrategy) => {
     let entryNetCost = 0;
@@ -667,11 +752,87 @@ export default function PortfolioScreen() {
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {tab === "dashboard" && (
-          <PerformanceDashboard
-            trades={openTrades}
-            timeframe={timeframe}
-            onTimeframeChange={setTimeframe}
-          />
+          <>
+            <View style={styles.balanceCard}>
+              <View style={styles.balanceHeader}>
+                <Text style={styles.balanceLabel}>ACCOUNT BALANCE</Text>
+                <Pressable onPress={() => { setBalanceInput(accountBalance > 0 ? String(accountBalance) : ""); setShowBalanceEdit(true); }} style={styles.balanceEditBtn} accessibilityLabel="Edit balance" accessibilityRole="button">
+                  <Feather name="edit-2" size={12} color={Colors.accent} />
+                </Pressable>
+              </View>
+              {showBalanceEdit ? (
+                <View style={styles.balanceEditRow}>
+                  <TextInput style={styles.balanceInput} keyboardType="decimal-pad" value={balanceInput} onChangeText={setBalanceInput} placeholder="e.g. 25000" placeholderTextColor={Colors.textMuted} autoFocus />
+                  <Pressable style={styles.balanceSaveBtn} onPress={handleSaveBalance}><Text style={styles.balanceSaveText}>Save</Text></Pressable>
+                  <Pressable style={styles.balanceCancelBtn} onPress={() => setShowBalanceEdit(false)}><Text style={styles.balanceCancelText}>Cancel</Text></Pressable>
+                </View>
+              ) : (
+                <Text style={styles.balanceValue}>${accountBalance.toLocaleString()}</Text>
+              )}
+              {positions.length > 0 && (
+                <View style={styles.balanceTotalRow}>
+                  <Text style={styles.balanceTotalLabel}>Total Portfolio Value</Text>
+                  <Text style={styles.balanceTotalValue}>${(accountBalance + totalPositionValue).toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
+                </View>
+              )}
+            </View>
+
+            {positions.length > 0 && (
+              <View style={styles.positionsCard}>
+                <View style={styles.positionsHeader}>
+                  <Feather name="briefcase" size={14} color={Colors.accent} />
+                  <Text style={styles.positionsTitle}>Stock Positions</Text>
+                  <Text style={styles.positionsCount}>{positions.length}</Text>
+                </View>
+                {positions.map((p) => (
+                  <View key={p.id}>
+                    <View style={styles.posSeparator} />
+                    <View style={styles.posContainer}>
+                      <PositionRow position={p} quote={quoteMap[p.ticker]} />
+                      <Pressable style={styles.posDeleteBtn} onPress={() => { Alert.alert("Remove Position", `Remove ${p.ticker} from your portfolio?`, [{ text: "Cancel", style: "cancel" }, { text: "Remove", style: "destructive", onPress: () => deletePosition(p.id) }]); }} accessibilityLabel={`Remove ${p.ticker}`} accessibilityRole="button">
+                        <Feather name="x" size={12} color={Colors.red} />
+                      </Pressable>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {showAddPosition ? (
+              <View style={styles.addPosForm}>
+                <Text style={styles.addPosTitle}>Add Position</Text>
+                <View style={styles.addPosInputRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.addPosLabel}>Ticker</Text>
+                    <TextInput style={styles.addPosInput} value={newPosTicker} onChangeText={(v) => setNewPosTicker(v.toUpperCase())} placeholder="AAPL" placeholderTextColor={Colors.textMuted} autoCapitalize="characters" />
+                  </View>
+                  <View style={{ flex: 0.7 }}>
+                    <Text style={styles.addPosLabel}>Shares</Text>
+                    <TextInput style={styles.addPosInput} value={newPosShares} onChangeText={setNewPosShares} placeholder="100" placeholderTextColor={Colors.textMuted} keyboardType="number-pad" />
+                  </View>
+                  <View style={{ flex: 0.8 }}>
+                    <Text style={styles.addPosLabel}>Avg Cost</Text>
+                    <TextInput style={styles.addPosInput} value={newPosCost} onChangeText={setNewPosCost} placeholder="150.00" placeholderTextColor={Colors.textMuted} keyboardType="decimal-pad" />
+                  </View>
+                </View>
+                <View style={styles.addPosBtns}>
+                  <Pressable style={styles.addPosCancelBtn} onPress={() => setShowAddPosition(false)}><Text style={styles.addPosCancelText}>Cancel</Text></Pressable>
+                  <Pressable style={styles.addPosConfirmBtn} onPress={handleAddPosition}><Text style={styles.addPosConfirmText}>Add</Text></Pressable>
+                </View>
+              </View>
+            ) : (
+              <Pressable style={styles.addPosBtn} onPress={() => setShowAddPosition(true)} accessibilityLabel="Add stock position" accessibilityRole="button">
+                <Feather name="plus" size={14} color={Colors.accent} />
+                <Text style={styles.addPosBtnText}>Add Position</Text>
+              </Pressable>
+            )}
+
+            <PerformanceDashboard
+              trades={openTrades}
+              timeframe={timeframe}
+              onTimeframeChange={setTimeframe}
+            />
+          </>
         )}
 
         {tab === "strategies" && (
@@ -829,4 +990,44 @@ const styles = StyleSheet.create({
   modalCancelText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: Colors.textSecondary },
   modalConfirmBtn: { flex: 1, paddingVertical: 14, borderRadius: 14, backgroundColor: Colors.accent, alignItems: "center" },
   modalConfirmText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: Colors.bg },
+  balanceCard: { backgroundColor: Colors.glassElevated, borderRadius: 16, padding: 16, gap: 8, marginHorizontal: 20, marginBottom: 12, borderWidth: 1, borderColor: Colors.glassBorder },
+  balanceHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  balanceLabel: { fontSize: 10, fontFamily: "Inter_700Bold", color: Colors.textMuted, letterSpacing: 0.8 },
+  balanceEditBtn: { padding: 6, backgroundColor: Colors.accentDim, borderRadius: 8 },
+  balanceValue: { fontSize: 28, fontFamily: "Inter_700Bold", color: Colors.textPrimary },
+  balanceEditRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  balanceInput: { flex: 1, backgroundColor: Colors.glass, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: Colors.textPrimary, fontFamily: "Inter_600SemiBold", fontSize: 16, borderWidth: 1, borderColor: Colors.glassBorder },
+  balanceSaveBtn: { backgroundColor: Colors.accent, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
+  balanceSaveText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.bg },
+  balanceCancelBtn: { paddingHorizontal: 10, paddingVertical: 10 },
+  balanceCancelText: { fontSize: 13, fontFamily: "Inter_500Medium", color: Colors.textMuted },
+  balanceTotalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTopWidth: 1, borderTopColor: Colors.glassBorder },
+  balanceTotalLabel: { fontSize: 11, fontFamily: "Inter_500Medium", color: Colors.textMuted },
+  balanceTotalValue: { fontSize: 15, fontFamily: "Inter_700Bold", color: Colors.accent },
+  positionsCard: { backgroundColor: Colors.glassElevated, borderRadius: 16, padding: 14, marginHorizontal: 20, marginBottom: 12, borderWidth: 1, borderColor: Colors.glassBorder },
+  positionsHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  positionsTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.textPrimary, flex: 1 },
+  positionsCount: { fontSize: 11, fontFamily: "Inter_700Bold", color: Colors.accent, backgroundColor: Colors.accentDim, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, overflow: "hidden" },
+  posRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10 },
+  posLeft: { flex: 1 },
+  posTicker: { fontSize: 14, fontFamily: "Inter_700Bold", color: Colors.textPrimary },
+  posShares: { fontSize: 11, fontFamily: "Inter_400Regular", color: Colors.textMuted, marginTop: 2 },
+  posRight: { alignItems: "flex-end", gap: 2 },
+  posValue: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.textPrimary },
+  posPnl: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  posSeparator: { height: 1, backgroundColor: Colors.glassBorder },
+  posContainer: { flexDirection: "row", alignItems: "center" },
+  posDeleteBtn: { padding: 8, marginLeft: 4 },
+  addPosBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginHorizontal: 20, marginBottom: 12, paddingVertical: 12, backgroundColor: Colors.accentDim, borderRadius: 14, borderWidth: 1, borderColor: Colors.accent + "20" },
+  addPosBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.accent },
+  addPosForm: { backgroundColor: Colors.glassElevated, borderRadius: 16, padding: 16, marginHorizontal: 20, marginBottom: 12, borderWidth: 1, borderColor: Colors.glassBorder, gap: 12 },
+  addPosTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.textPrimary },
+  addPosInputRow: { flexDirection: "row", gap: 8 },
+  addPosLabel: { fontSize: 10, fontFamily: "Inter_500Medium", color: Colors.textMuted, letterSpacing: 0.5, marginBottom: 4 },
+  addPosInput: { backgroundColor: Colors.glass, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 10, color: Colors.textPrimary, fontFamily: "Inter_500Medium", fontSize: 14, borderWidth: 1, borderColor: Colors.glassBorder },
+  addPosBtns: { flexDirection: "row", gap: 8, justifyContent: "flex-end" },
+  addPosCancelBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, backgroundColor: Colors.glass, borderWidth: 1, borderColor: Colors.glassBorder },
+  addPosCancelText: { fontSize: 13, fontFamily: "Inter_500Medium", color: Colors.textMuted },
+  addPosConfirmBtn: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10, backgroundColor: Colors.accent },
+  addPosConfirmText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.bg },
 });
