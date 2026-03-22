@@ -40,9 +40,35 @@ artifacts-monorepo/
 
 - **Repo**: https://github.com/BMWeinstein7/Option-Viz-MOBILE
 - **Branch**: master
-- **Release**: v3.3.0
+- **Release**: v3.4.0
 
-### Release Notes — v3.3.0 (Current)
+### Release Notes — v3.4.0 (Current)
+
+#### Navigation & Deep Linking
+- **Builder back button** — step-by-step back navigation through wizard (analysis→legs→template→ticker) with header back arrow
+- **Market → Builder deep linking** — tap a quote's build button or a flow entry to jump to Builder with ticker pre-filled; flow entries also pre-select call/put template
+- **BuilderIntent context** — shared state mechanism for cross-tab navigation with automatic cleanup
+
+#### Portfolio & Account Management
+- **Editable account balance** — inline edit field in portfolio dashboard with save/cancel, persisted to AsyncStorage
+- **Stock positions tracking** — add/remove stock positions (ticker, shares, avg cost) with live P&L from batch quotes
+- **Total portfolio value** — combines cash balance + live position values
+- **Guest session cleanup** — balance and positions now properly cleared on guest session expiry
+
+#### Margin Calculator
+- **Margin requirement engine** — `lib/marginCalc.ts` with full Reg-T margin logic: naked call/put (20%/10% methods), credit/debit spread detection, multi-leg defined-risk pairing
+- **Builder integration** — margin card in legs step showing requirement, margin type badge, and account balance impact
+- **Analysis metrics** — two MetricCards in analysis step showing margin requirement and buying power impact
+
+#### Performance Enhancements
+- **Rate of Return** — overall ROR, total capital deployed, average holding days, per-trade annualized ROR
+- **PDF report update** — 3 new stat boxes (Overall ROR, Capital Deployed, Avg Holding Days) in export
+
+#### Builder Redesign
+- **Most Active tickers** — replaced 30-chip grid with glassmorphic live quote rows for SPY, AAPL, TSLA, NVDA, AMD, MSFT, QQQ, META, AMZN, GOOGL
+- **Live pricing** — each row shows current price with color-coded change percentage
+
+### Release Notes — v3.3.0
 
 #### Security, Accessibility & Responsive Enhancements
 - **Ticker input sanitization** — all 7 market routes + SSE stream validate tickers via `sanitizeTicker` regex (`/^[A-Za-z.]{1,10}$/`); rejects invalid formats with 400 BAD_REQUEST
@@ -150,9 +176,10 @@ artifacts-monorepo/
 - **Liquid Glass design** — dark grey #0D0D12 + Tiffany blue #0ABAB5 glassmorphic UI
 
 ### App Tabs
-- **Builder** (`app/(tabs)/index.tsx`) — 4-step strategy wizard: ticker → strategy → legs (live mid prices, editable qty) → analysis. Can open trade directly from builder with live midpoints as entry.
-- **Market** (`app/(tabs)/market.tsx`) — 3 views: Live Quotes (SSE streaming), Chain (calls/puts), Flow (put/call ratio)
-- **Portfolio** (`app/(tabs)/portfolio.tsx`) — 3 sub-tabs: Dashboard (performance summary), Saved Strategies, Trades (open/closed with live P&L)
+- **Builder** (`app/(tabs)/index.tsx`) — 4-step strategy wizard: ticker → strategy → legs (live mid prices, editable qty, margin card) → analysis. Back navigation through steps. Most Active tickers with live quotes. Deep linking from Market tab.
+- **Market** (`app/(tabs)/market.tsx`) — 3 views: Live Quotes (SSE streaming), Chain (calls/puts), Flow (put/call ratio). Build button on quotes and flow entries for deep linking to Builder.
+- **Portfolio** (`app/(tabs)/portfolio.tsx`) — 3 sub-tabs: Dashboard (account balance, stock positions with live P&L, performance summary), Saved Strategies, Trades (open/closed with live P&L)
+- **Performance** (`app/(tabs)/performance.tsx`) — Realized P&L, win rate, ROR, capital deployed, avg hold, top trades, PDF export
 
 ### Auth Flow
 - AuthScreen shows first with Sign In / Sign Up toggle + "Continue as Guest"

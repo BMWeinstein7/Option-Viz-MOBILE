@@ -20,6 +20,8 @@ import { Analytics, AnalyticsEvents } from "@/lib/analytics";
 
 interface TradeWithPercent extends OpenTrade {
   pctReturn: number;
+  holdingDays?: number;
+  annualizedROR?: number;
 }
 
 function usePerformanceData(trades: OpenTrade[]) {
@@ -48,13 +50,30 @@ function usePerformanceData(trades: OpenTrade[]) {
         ? losers.reduce((s, t) => s + (t.realizedPnL ?? 0), 0) / losers.length
         : 0;
 
-    const withPct: TradeWithPercent[] = closedTrades.map((t) => ({
-      ...t,
-      pctReturn:
+    const totalCapitalDeployed = closedTrades.reduce(
+      (s, t) => s + Math.abs(t.entryNetCost),
+      0
+    );
+    const overallROR =
+      totalCapitalDeployed > 0
+        ? (totalRealizedPnL / totalCapitalDeployed) * 100
+        : 0;
+
+    const withPct: TradeWithPercent[] = closedTrades.map((t) => {
+      const pctReturn =
         t.entryNetCost !== 0
           ? ((t.realizedPnL ?? 0) / Math.abs(t.entryNetCost)) * 100
-          : 0,
-    }));
+          : 0;
+      const holdingDays =
+        t.closedAt && t.openedAt
+          ? Math.max(1, Math.round((t.closedAt - t.openedAt) / 86400000))
+          : 1;
+      const annualizedROR =
+        holdingDays > 0 && t.entryNetCost !== 0
+          ? (pctReturn / holdingDays) * 365
+          : 0;
+      return { ...t, pctReturn, holdingDays, annualizedROR };
+    });
 
     const winnersWithPct = withPct.filter((t) => (t.realizedPnL ?? 0) > 0);
     const losersWithPct = withPct.filter((t) => (t.realizedPnL ?? 0) < 0);
@@ -72,6 +91,11 @@ function usePerformanceData(trades: OpenTrade[]) {
       .sort((a, b) => a.pctReturn - b.pctReturn)
       .slice(0, 5);
 
+    const avgHoldingDays =
+      withPct.length > 0
+        ? withPct.reduce((s, t) => s + (t.holdingDays ?? 1), 0) / withPct.length
+        : 0;
+
     return {
       closedCount: closedTrades.length,
       openCount,
@@ -79,6 +103,9 @@ function usePerformanceData(trades: OpenTrade[]) {
       winRate,
       avgGain,
       avgLoss,
+      overallROR,
+      totalCapitalDeployed,
+      avgHoldingDays,
       topByDollarGain,
       topByDollarLoss,
       topByPctGain,
@@ -143,6 +170,9 @@ function RankedTradeCard({
         <Text style={[styles.rankedPct, { color: pnlColor }]}>
           {fmtPct(trade.pctReturn)}
         </Text>
+        {trade.holdingDays != null && (
+          <Text style={styles.rankedDays}>{trade.holdingDays}d</Text>
+        )}
       </View>
     </View>
   );
@@ -426,6 +456,18 @@ function buildPdfHtml(
       <div class="stat-label">Avg Loss</div>
       <div class="stat-value red">${data.avgLoss < 0 ? fmtDollar(data.avgLoss) : "—"}</div>
     </div>
+    <div class="stat-box">
+      <div class="stat-label">Overall ROR</div>
+      <div class="stat-value ${data.overallROR >= 0 ? "green" : "red"}">${fmtPct(data.overallROR)}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Capital Deployed</div>
+      <div class="stat-value">$${data.totalCapitalDeployed.toFixed(0)}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Avg Hold Period</div>
+      <div class="stat-value">${data.avgHoldingDays.toFixed(0)} days</div>
+    </div>
   </div>
   ${tableBlock("Top Winners (by $)", data.topByDollarGain)}
   ${tableBlock("Top Losers (by $)", data.topByDollarLoss)}
@@ -593,6 +635,30 @@ export default function PerformanceScreen() {
                 value={data.avgLoss < 0 ? fmtDollar(data.avgLoss) : "—"}
                 color={Colors.red}
               />
+            </View>
+
+            <View style={styles.rorCard}>
+              <Text style={styles.rorTitle}>Return on Risk</Text>
+              <View style={styles.rorRow}>
+                <View style={styles.rorStat}>
+                  <Text style={styles.rorStatLabel}>OVERALL ROR</Text>
+                  <Text style={[styles.rorStatValue, { color: data.overallROR >= 0 ? Colors.accent : Colors.red }]}>
+                    {fmtPct(data.overallROR)}
+                  </Text>
+                </View>
+                <View style={styles.rorStat}>
+                  <Text style={styles.rorStatLabel}>CAPITAL DEPLOYED</Text>
+                  <Text style={[styles.rorStatValue, { color: Colors.textPrimary }]}>
+                    ${data.totalCapitalDeployed.toFixed(0)}
+                  </Text>
+                </View>
+                <View style={styles.rorStat}>
+                  <Text style={styles.rorStatLabel}>AVG HOLD</Text>
+                  <Text style={[styles.rorStatValue, { color: Colors.blue }]}>
+                    {data.avgHoldingDays.toFixed(0)}d
+                  </Text>
+                </View>
+              </View>
             </View>
 
             <TopTradesSection
@@ -784,4 +850,18 @@ const styles = StyleSheet.create({
   rankedPnl: { alignItems: "flex-end", gap: 2 },
   rankedDollar: { fontSize: 14, fontFamily: "Inter_700Bold" },
   rankedPct: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  rankedDays: { fontSize: 9, fontFamily: "Inter_400Regular", color: Colors.textMuted },
+  rorCard: {
+    backgroundColor: Colors.glassElevated,
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: Colors.glassBorder,
+  },
+  rorTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.textSecondary },
+  rorRow: { flexDirection: "row", justifyContent: "space-between" },
+  rorStat: { alignItems: "center", gap: 4 },
+  rorStatLabel: { fontSize: 9, fontFamily: "Inter_600SemiBold", color: Colors.textMuted, letterSpacing: 0.5 },
+  rorStatValue: { fontSize: 18, fontFamily: "Inter_700Bold" },
 });

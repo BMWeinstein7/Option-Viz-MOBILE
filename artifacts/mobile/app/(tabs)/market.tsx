@@ -14,11 +14,13 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { POPULAR_TICKERS } from "@/constants/strategies";
 import { api, OptionsChain, StockQuote, FlowEntry, PutCallRatio } from "@/hooks/useApi";
 import { ProfileButton } from "@/components/ProfileMenu";
 import { Analytics, AnalyticsEvents } from "@/lib/analytics";
+import { useAppContext } from "@/context/AppContext";
 
 type MarketView = "quotes" | "chain" | "flow";
 
@@ -178,10 +180,10 @@ function LiveQuoteDetail({ ticker }: { ticker: string }) {
   );
 }
 
-function FlowRow({ entry }: { entry: FlowEntry }) {
+function FlowRow({ entry, onBuild }: { entry: FlowEntry; onBuild?: () => void }) {
   const isCall = entry.type === "CALL";
   return (
-    <View style={styles.flowRow}>
+    <Pressable style={styles.flowRow} onPress={onBuild} accessibilityLabel={`Build strategy for ${entry.type} ${entry.strike}`} accessibilityRole="button">
       <View style={[styles.flowTypeBadge, { backgroundColor: isCall ? Colors.accentDim : Colors.redDim }]}>
         <Text style={[styles.flowTypeText, { color: isCall ? Colors.accent : Colors.red }]}>
           {entry.type}
@@ -194,12 +196,14 @@ function FlowRow({ entry }: { entry: FlowEntry }) {
       <Text style={[styles.flowCell, { color: entry.volOiRatio > 1.5 ? Colors.gold : Colors.textSecondary }]}>
         {entry.volOiRatio.toFixed(2)}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 
 export default function MarketScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { setBuilderIntent } = useAppContext();
   const [view, setView] = useState<MarketView>("quotes");
   const [searchInput, setSearchInput] = useState("");
   const [searchTicker, setSearchTicker] = useState("");
@@ -209,6 +213,12 @@ export default function MarketScreen() {
   const [chainTab, setChainTab] = useState<"calls" | "puts">("calls");
   const [flowTicker, setFlowTicker] = useState("SPY");
   const [flowInput, setFlowInput] = useState("SPY");
+
+  const navigateToBuilder = useCallback((ticker: string, optionType?: "call" | "put") => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setBuilderIntent({ ticker: ticker.toUpperCase(), optionType });
+    router.push("/(tabs)");
+  }, [setBuilderIntent, router]);
 
   const displayTickers = searchTicker
     ? [searchTicker, ...POPULAR_TICKERS.filter(t => t !== searchTicker)]
@@ -328,10 +338,17 @@ export default function MarketScreen() {
             renderItem={({ item, index }) => (
               <View>
                 {index > 0 && <View style={styles.separator} />}
-                <QuoteRow
-                  ticker={item}
-                  onPress={() => { setSearchTicker(item); setSearchInput(item); }}
-                />
+                <View style={styles.quoteRowContainer}>
+                  <View style={{ flex: 1 }}>
+                    <QuoteRow
+                      ticker={item}
+                      onPress={() => { setSearchTicker(item); setSearchInput(item); }}
+                    />
+                  </View>
+                  <Pressable style={styles.buildBtn} onPress={() => navigateToBuilder(item)} accessibilityLabel={`Build strategy for ${item}`} accessibilityRole="button">
+                    <Feather name="tool" size={12} color={Colors.accent} />
+                  </Pressable>
+                </View>
               </View>
             )}
             ListHeaderComponent={
@@ -532,7 +549,7 @@ export default function MarketScreen() {
                 <Text style={styles.flowHeaderCell}>V/OI</Text>
               </View>
               {flowData.flow.slice(0, 30).map((entry, i) => (
-                <FlowRow key={`${entry.strike}-${entry.type}-${entry.expiration}-${i}`} entry={entry} />
+                <FlowRow key={`${entry.strike}-${entry.type}-${entry.expiration}-${i}`} entry={entry} onBuild={() => navigateToBuilder(flowTicker, entry.type === "CALL" ? "call" : "put")} />
               ))}
             </>
           ) : null}
@@ -672,4 +689,10 @@ const styles = StyleSheet.create({
   flowTypeBadge: { width: 48, paddingVertical: 3, borderRadius: 4, alignItems: "center" },
   flowTypeText: { fontSize: 10, fontFamily: "Inter_700Bold" },
   flowCell: { flex: 1, fontSize: 12, fontFamily: "Inter_500Medium", color: Colors.textSecondary, textAlign: "center" },
+  quoteRowContainer: { flexDirection: "row", alignItems: "center" },
+  buildBtn: {
+    width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.accentDim,
+    alignItems: "center", justifyContent: "center", marginRight: 20,
+    borderWidth: 1, borderColor: Colors.accent + "25",
+  },
 });
