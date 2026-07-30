@@ -236,8 +236,8 @@ export default function MarketScreen() {
     queryKey: ["chain", chainTicker, activeExp],
     queryFn: () => api.getChain(chainTicker, activeExp),
     enabled: view === "chain" && !!chainTicker && !!activeExp,
-    refetchInterval: 8000,
-    staleTime: 6000,
+    refetchInterval: 5000,
+    staleTime: 3000,
   });
 
   const { data: flowData, isLoading: flowLoading } = useQuery({

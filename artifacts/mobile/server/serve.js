@@ -65,10 +65,70 @@ function serveManifest(platform, res) {
   res.end(manifest);
 }
 
+// Only allow valid hostname characters (letters, digits, dot, hyphen)
+// with an optional :port suffix. Anything else is rejected.
+const VALID_HOST_RE = /^[a-zA-Z0-9.-]+(:\d{1,5})?$/;
+
+/**
+ * Build the set of hostnames this server will ever reflect into HTML.
+ * Sources (all optional, env-driven):
+ * - ALLOWED_HOSTS: comma-separated explicit allowlist
+ * - REPLIT_DOMAINS / REPLIT_DEV_DOMAIN / REPLIT_EXPO_DEV_DOMAIN: Replit-provided domains
+ * - localhost / 127.0.0.1 for local development
+ * Only the hostname part is matched; ports are ignored for allowlisting.
+ */
+function buildAllowedHosts(env = process.env) {
+  const hosts = new Set(["localhost", "127.0.0.1", "0.0.0.0"]);
+  const add = (value) => {
+    if (!value) return;
+    for (const entry of String(value).split(",")) {
+      const hostname = entry.trim().toLowerCase().replace(/:\d+$/, "");
+      if (hostname && VALID_HOST_RE.test(hostname)) hosts.add(hostname);
+    }
+  };
+  add(env.ALLOWED_HOSTS);
+  add(env.REPLIT_DOMAINS);
+  add(env.REPLIT_DEV_DOMAIN);
+  add(env.REPLIT_EXPO_DEV_DOMAIN);
+  return hosts;
+}
+
+const ALLOWED_HOSTS = buildAllowedHosts();
+
+/**
+ * Returns the host (with optional port) if it is syntactically valid AND its
+ * hostname is on the allowlist; otherwise null.
+ */
+function sanitizeHost(rawHost, allowedHosts = ALLOWED_HOSTS) {
+  if (typeof rawHost !== "string" || !VALID_HOST_RE.test(rawHost)) {
+    return null;
+  }
+  const hostname = rawHost.toLowerCase().replace(/:\d+$/, "");
+  return allowedHosts.has(hostname) ? rawHost : null;
+}
+
+/** Fallback host used when no request header passes the allowlist. */
+function defaultHost(allowedHosts = ALLOWED_HOSTS) {
+  for (const host of allowedHosts) {
+    if (host !== "localhost" && host !== "127.0.0.1" && host !== "0.0.0.0") {
+      return host;
+    }
+  }
+  return "localhost";
+}
+
+function resolveRequestHost(headers, allowedHosts = ALLOWED_HOSTS) {
+  return (
+    sanitizeHost(headers["x-forwarded-host"], allowedHosts) ||
+    sanitizeHost(headers["host"], allowedHosts) ||
+    defaultHost(allowedHosts)
+  );
+}
+
 function serveLandingPage(req, res, landingPageTemplate, appName) {
   const forwardedProto = req.headers["x-forwarded-proto"];
-  const protocol = forwardedProto || "https";
-  const host = req.headers["x-forwarded-host"] || req.headers["host"];
+  const protocol = forwardedProto === "http" ? "http" : "https";
+  const host = resolveRequestHost(req.headers);
   const baseUrl = `${protocol}://${host}`;
   const expsUrl = `${host}`;
 
@@ -104,32 +164,44 @@ function serveStaticFile(urlPath, res) {
   res.end(content);
 }
 
-const landingPageTemplate = fs.readFileSync(TEMPLATE_PATH, "utf-8");
-const appName = getAppName();
+function createServer() {
+  const landingPageTemplate = fs.readFileSync(TEMPLATE_PATH, "utf-8");
+  const appName = getAppName();
 
-const server = http.createServer((req, res) => {
-  const url = new URL(req.url || "/", `http://${req.headers.host}`);
-  let pathname = url.pathname;
+  return http.createServer((req, res) => {
+    const url = new URL(req.url || "/", "http://localhost");
+    let pathname = url.pathname;
 
-  if (basePath && pathname.startsWith(basePath)) {
-    pathname = pathname.slice(basePath.length) || "/";
-  }
-
-  if (pathname === "/" || pathname === "/manifest") {
-    const platform = req.headers["expo-platform"];
-    if (platform === "ios" || platform === "android") {
-      return serveManifest(platform, res);
+    if (basePath && pathname.startsWith(basePath)) {
+      pathname = pathname.slice(basePath.length) || "/";
     }
 
-    if (pathname === "/") {
-      return serveLandingPage(req, res, landingPageTemplate, appName);
+    if (pathname === "/" || pathname === "/manifest") {
+      const platform = req.headers["expo-platform"];
+      if (platform === "ios" || platform === "android") {
+        return serveManifest(platform, res);
+      }
+
+      if (pathname === "/") {
+        return serveLandingPage(req, res, landingPageTemplate, appName);
+      }
     }
-  }
 
-  serveStaticFile(pathname, res);
-});
+    serveStaticFile(pathname, res);
+  });
+}
 
-const port = parseInt(process.env.PORT || "3000", 10);
-server.listen(port, "0.0.0.0", () => {
-  console.log(`Serving static Expo build on port ${port}`);
-});
+if (require.main === module) {
+  const port = parseInt(process.env.PORT || "3000", 10);
+  createServer().listen(port, "0.0.0.0", () => {
+    console.log(`Serving static Expo build on port ${port}`);
+  });
+}
+
+module.exports = {
+  buildAllowedHosts,
+  sanitizeHost,
+  defaultHost,
+  resolveRequestHost,
+  createServer,
+};
