@@ -1,0 +1,27 @@
+kind = "slides"
+previewPath = "/optionviz-deck/"
+title = "OptionViz Project Deck"
+version = "1.0.0"
+id = "artifacts/optionviz-deck"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/optionviz-deck/" ]
+localPort = 22417
+
+[services.development]
+run = "pnpm --filter @workspace/optionviz-deck run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/optionviz-deck", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/optionviz-deck/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22417"
+BASE_PATH = "/optionviz-deck/"
