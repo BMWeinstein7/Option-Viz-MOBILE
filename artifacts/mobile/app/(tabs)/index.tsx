@@ -13,7 +13,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { STRATEGY_TEMPLATES, OUTLOOK_COLORS, OUTLOOK_LABELS } from "@/constants/strategies";
 import { api, StrategyAnalysis, OptionContract, StockQuote } from "@/hooks/useApi";
@@ -81,6 +81,7 @@ function findClosestContract(contracts: OptionContract[], strike: number): Optio
 
 export default function BuilderScreen() {
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const { saveStrategy, openTrade, savedStrategies, builderIntent, setBuilderIntent, accountBalance } = useAppContext();
 
   const [step, setStep] = useState<BuilderStep>("ticker");
@@ -103,6 +104,7 @@ export default function BuilderScreen() {
     enabled: !!ticker,
     refetchInterval: 3000,
     staleTime: 2000,
+    refetchOnMount: "always",
   });
 
   const {
@@ -112,6 +114,7 @@ export default function BuilderScreen() {
     queryKey: ["expirations", ticker],
     queryFn: () => api.getExpirations(ticker),
     enabled: !!ticker,
+    refetchOnMount: "always",
   });
 
   const {
@@ -122,6 +125,7 @@ export default function BuilderScreen() {
     enabled: !!ticker && !!selectedExpiration,
     refetchInterval: 5000,
     staleTime: 3000,
+    refetchOnMount: "always",
   });
 
   useEffect(() => {
@@ -166,6 +170,12 @@ export default function BuilderScreen() {
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Pull fresh market data immediately so the step we return to shows
+    // current prices, not the last cached ones.
+    if (ticker) {
+      queryClient.invalidateQueries({ queryKey: ["quote", ticker] });
+      queryClient.invalidateQueries({ queryKey: ["chain", ticker] });
+    }
     if (step === "analysis") setStep("legs");
     else if (step === "legs") setStep("template");
     else if (step === "template") {
@@ -173,7 +183,7 @@ export default function BuilderScreen() {
       setTicker("");
       setTickerInput("");
     }
-  }, [step]);
+  }, [step, ticker, queryClient]);
 
   const marginResult = useMemo(() => {
     if (legs.length === 0 || !quote) return null;
@@ -464,7 +474,15 @@ export default function BuilderScreen() {
     setSelectedTemplateId(null);
     setSelectedExpiration("");
     setShowAddLeg(false);
-  }, []);
+    // Drop this ticker's cached market data so starting over always fetches
+    // current prices instead of showing what was cached from the last run.
+    // Scoped to the ticker to avoid disturbing queries other tabs rely on.
+    if (ticker) {
+      queryClient.removeQueries({ queryKey: ["quote", ticker] });
+      queryClient.removeQueries({ queryKey: ["chain", ticker] });
+      queryClient.removeQueries({ queryKey: ["expirations", ticker] });
+    }
+  }, [queryClient, ticker]);
 
   const fmtMoneyOrUnlimited = (n: number | null | undefined) => {
     if (n == null) return "Unlimited";
