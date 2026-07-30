@@ -8,7 +8,14 @@ import type {
 } from "./marketTypes.js";
 import { blackScholes } from "./blackScholes.js";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
+// yahoo-finance2 is ESM-only; when this server is bundled to CJS for
+// production, the default export arrives wrapped (module namespace) instead
+// of the class. Unwrap defensively so both dev (ESM) and prod (CJS) work.
+const YahooFinanceCtor: typeof YahooFinance =
+  (YahooFinance as unknown as { default?: typeof YahooFinance }).default ??
+  YahooFinance;
+
+const yf = new YahooFinanceCtor({ suppressNotices: ["yahooSurvey"] });
 
 // Short-lived caches to avoid hammering the provider (SSE polls every 3s,
 // flow/PCR fan out over multiple expirations).
