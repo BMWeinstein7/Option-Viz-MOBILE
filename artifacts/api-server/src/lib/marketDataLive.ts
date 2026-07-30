@@ -19,8 +19,8 @@ const yf = new YahooFinanceCtor({ suppressNotices: ["yahooSurvey"] });
 
 // Short-lived caches to avoid hammering the provider (SSE polls every 3s,
 // flow/PCR fan out over multiple expirations).
-const QUOTE_TTL_MS = 3_000;
-const CHAIN_TTL_MS = 30_000;
+const QUOTE_TTL_MS = 1_500;
+const CHAIN_TTL_MS = 5_000;
 const EXPIRATIONS_TTL_MS = 5 * 60_000;
 
 interface CacheEntry<T> {
