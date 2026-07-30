@@ -20,15 +20,19 @@ import type {
   AnalyzeStrategyRequest,
   AuthUserEnvelope,
   BeginBrowserLoginParams,
+  ChainSummary,
   ErrorEnvelope,
   ErrorResponse,
   ExpirationsResponse,
+  GetPriceHistoryParams,
   HandleBrowserLoginCallbackParams,
   HealthStatus,
   LogoutSuccess,
   MobileTokenExchangeRequest,
   MobileTokenExchangeSuccess,
   OptionsChain,
+  PriceHistory,
+  PutCallRatio,
   StockQuote,
   StrategyAnalysis,
 } from "./api.schemas";
@@ -385,6 +389,304 @@ export function useGetOptionsChain<
     expiration,
     options,
   );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get put/call ratios and option volume/OI totals
+ */
+export const getGetPutCallRatioUrl = (ticker: string) => {
+  return `/api/market/pcr/${ticker}`;
+};
+
+export const getPutCallRatio = async (
+  ticker: string,
+  options?: RequestInit,
+): Promise<PutCallRatio> => {
+  return customFetch<PutCallRatio>(getGetPutCallRatioUrl(ticker), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPutCallRatioQueryKey = (ticker: string) => {
+  return [`/api/market/pcr/${ticker}`] as const;
+};
+
+export const getGetPutCallRatioQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPutCallRatio>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  ticker: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPutCallRatio>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPutCallRatioQueryKey(ticker);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPutCallRatio>>> = ({
+    signal,
+  }) => getPutCallRatio(ticker, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!ticker,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPutCallRatio>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPutCallRatioQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPutCallRatio>>
+>;
+export type GetPutCallRatioQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get put/call ratios and option volume/OI totals
+ */
+
+export function useGetPutCallRatio<
+  TData = Awaited<ReturnType<typeof getPutCallRatio>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  ticker: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPutCallRatio>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPutCallRatioQueryOptions(ticker, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Aggregated open interest, volume, IV, and quotes per strike for one expiration, plus totals and max pain.
+ * @summary Get per-strike options summary for charting
+ */
+export const getGetChainSummaryUrl = (ticker: string, expiration: string) => {
+  return `/api/market/chain-summary/${ticker}/${expiration}`;
+};
+
+export const getChainSummary = async (
+  ticker: string,
+  expiration: string,
+  options?: RequestInit,
+): Promise<ChainSummary> => {
+  return customFetch<ChainSummary>(getGetChainSummaryUrl(ticker, expiration), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetChainSummaryQueryKey = (
+  ticker: string,
+  expiration: string,
+) => {
+  return [`/api/market/chain-summary/${ticker}/${expiration}`] as const;
+};
+
+export const getGetChainSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getChainSummary>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  ticker: string,
+  expiration: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getChainSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetChainSummaryQueryKey(ticker, expiration);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getChainSummary>>> = ({
+    signal,
+  }) => getChainSummary(ticker, expiration, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(ticker && expiration),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getChainSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetChainSummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getChainSummary>>
+>;
+export type GetChainSummaryQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get per-strike options summary for charting
+ */
+
+export function useGetChainSummary<
+  TData = Awaited<ReturnType<typeof getChainSummary>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  ticker: string,
+  expiration: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getChainSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetChainSummaryQueryOptions(
+    ticker,
+    expiration,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get recent daily price history
+ */
+export const getGetPriceHistoryUrl = (
+  ticker: string,
+  params?: GetPriceHistoryParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/market/history/${ticker}?${stringifiedParams}`
+    : `/api/market/history/${ticker}`;
+};
+
+export const getPriceHistory = async (
+  ticker: string,
+  params?: GetPriceHistoryParams,
+  options?: RequestInit,
+): Promise<PriceHistory> => {
+  return customFetch<PriceHistory>(getGetPriceHistoryUrl(ticker, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPriceHistoryQueryKey = (
+  ticker: string,
+  params?: GetPriceHistoryParams,
+) => {
+  return [
+    `/api/market/history/${ticker}`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetPriceHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPriceHistory>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  ticker: string,
+  params?: GetPriceHistoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPriceHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPriceHistoryQueryKey(ticker, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPriceHistory>>> = ({
+    signal,
+  }) => getPriceHistory(ticker, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!ticker,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPriceHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPriceHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPriceHistory>>
+>;
+export type GetPriceHistoryQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get recent daily price history
+ */
+
+export function useGetPriceHistory<
+  TData = Awaited<ReturnType<typeof getPriceHistory>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  ticker: string,
+  params?: GetPriceHistoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPriceHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPriceHistoryQueryOptions(ticker, params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

@@ -93,6 +93,86 @@ export const GetOptionsChainResponse = zod.object({
 });
 
 /**
+ * @summary Get put/call ratios and option volume/OI totals
+ */
+export const GetPutCallRatioParams = zod.object({
+  ticker: zod.coerce.string(),
+});
+
+export const GetPutCallRatioResponse = zod.object({
+  ticker: zod.string(),
+  volRatio: zod.number(),
+  oiRatio: zod.number(),
+  totalCallVol: zod.number(),
+  totalPutVol: zod.number(),
+  totalCallOI: zod.number(),
+  totalPutOI: zod.number(),
+});
+
+/**
+ * Aggregated open interest, volume, IV, and quotes per strike for one expiration, plus totals and max pain.
+ * @summary Get per-strike options summary for charting
+ */
+export const GetChainSummaryParams = zod.object({
+  ticker: zod.coerce.string(),
+  expiration: zod.coerce.string(),
+});
+
+export const GetChainSummaryResponse = zod.object({
+  ticker: zod.string(),
+  expiration: zod.string(),
+  spotPrice: zod.number(),
+  source: zod.enum(["live", "simulated"]),
+  maxPain: zod.number().nullable(),
+  totalCallOpenInterest: zod.number(),
+  totalPutOpenInterest: zod.number(),
+  totalCallVolume: zod.number(),
+  totalPutVolume: zod.number(),
+  strikes: zod.array(
+    zod.object({
+      strike: zod.number(),
+      callOpenInterest: zod.number(),
+      putOpenInterest: zod.number(),
+      callVolume: zod.number(),
+      putVolume: zod.number(),
+      callIV: zod.number(),
+      putIV: zod.number(),
+      callBid: zod.number(),
+      callAsk: zod.number(),
+      putBid: zod.number(),
+      putAsk: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Get recent daily price history
+ */
+export const GetPriceHistoryParams = zod.object({
+  ticker: zod.coerce.string(),
+});
+
+export const getPriceHistoryQueryRangeDefault = `3mo`;
+
+export const GetPriceHistoryQueryParams = zod.object({
+  range: zod
+    .enum(["1mo", "3mo", "6mo", "1y"])
+    .default(getPriceHistoryQueryRangeDefault),
+});
+
+export const GetPriceHistoryResponse = zod.object({
+  ticker: zod.string(),
+  range: zod.string(),
+  points: zod.array(
+    zod.object({
+      date: zod.string(),
+      close: zod.number(),
+      volume: zod.number(),
+    }),
+  ),
+});
+
+/**
  * @summary Analyze a multi-leg options strategy
  */
 export const AnalyzeStrategyBody = zod.object({

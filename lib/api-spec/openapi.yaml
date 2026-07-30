@@ -107,6 +107,91 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /market/pcr/{ticker}:
+    get:
+      operationId: getPutCallRatio
+      tags: [market]
+      summary: Get put/call ratios and option volume/OI totals
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Put/call ratio summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PutCallRatio"
+        "404":
+          description: Ticker not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /market/chain-summary/{ticker}/{expiration}:
+    get:
+      operationId: getChainSummary
+      tags: [market]
+      summary: Get per-strike options summary for charting
+      description: Aggregated open interest, volume, IV, and quotes per strike for one expiration, plus totals and max pain.
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: expiration
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Chain summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChainSummary"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /market/history/{ticker}:
+    get:
+      operationId: getPriceHistory
+      tags: [market]
+      summary: Get recent daily price history
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: range
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [1mo, 3mo, 6mo, 1y]
+            default: 3mo
+      responses:
+        "200":
+          description: Daily price history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceHistory"
+        "404":
+          description: Ticker not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /strategy/analyze:
     post:
       operationId: analyzeStrategy
@@ -482,6 +567,134 @@ components:
         - greeks
         - breakEvenPoints
         - netCost
+    PutCallRatio:
+      type: object
+      properties:
+        ticker:
+          type: string
+        volRatio:
+          type: number
+        oiRatio:
+          type: number
+        totalCallVol:
+          type: integer
+        totalPutVol:
+          type: integer
+        totalCallOI:
+          type: integer
+        totalPutOI:
+          type: integer
+      required:
+        - ticker
+        - volRatio
+        - oiRatio
+        - totalCallVol
+        - totalPutVol
+        - totalCallOI
+        - totalPutOI
+    StrikeSummary:
+      type: object
+      properties:
+        strike:
+          type: number
+        callOpenInterest:
+          type: integer
+        putOpenInterest:
+          type: integer
+        callVolume:
+          type: integer
+        putVolume:
+          type: integer
+        callIV:
+          type: number
+        putIV:
+          type: number
+        callBid:
+          type: number
+        callAsk:
+          type: number
+        putBid:
+          type: number
+        putAsk:
+          type: number
+      required:
+        - strike
+        - callOpenInterest
+        - putOpenInterest
+        - callVolume
+        - putVolume
+        - callIV
+        - putIV
+        - callBid
+        - callAsk
+        - putBid
+        - putAsk
+    ChainSummary:
+      type: object
+      properties:
+        ticker:
+          type: string
+        expiration:
+          type: string
+        spotPrice:
+          type: number
+        source:
+          type: string
+          enum: [live, simulated]
+        maxPain:
+          type: number
+          nullable: true
+        totalCallOpenInterest:
+          type: integer
+        totalPutOpenInterest:
+          type: integer
+        totalCallVolume:
+          type: integer
+        totalPutVolume:
+          type: integer
+        strikes:
+          type: array
+          items:
+            $ref: "#/components/schemas/StrikeSummary"
+      required:
+        - ticker
+        - expiration
+        - spotPrice
+        - source
+        - maxPain
+        - totalCallOpenInterest
+        - totalPutOpenInterest
+        - totalCallVolume
+        - totalPutVolume
+        - strikes
+    PricePoint:
+      type: object
+      properties:
+        date:
+          type: string
+        close:
+          type: number
+        volume:
+          type: integer
+      required:
+        - date
+        - close
+        - volume
+    PriceHistory:
+      type: object
+      properties:
+        ticker:
+          type: string
+        range:
+          type: string
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/PricePoint"
+      required:
+        - ticker
+        - range
+        - points
     AuthUser:
       type: object
       required: [id, email, firstName, lastName, profileImageUrl]

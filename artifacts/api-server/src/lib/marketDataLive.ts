@@ -5,6 +5,8 @@ import type {
   OptionsChainData,
   FlowEntry,
   PutCallRatio,
+  PriceHistoryData,
+  PricePointData,
 } from "./marketTypes.js";
 import { blackScholes } from "./blackScholes.js";
 
@@ -298,4 +300,58 @@ export async function fetchPutCallRatio(ticker: string): Promise<PutCallRatio> {
     totalCallOI,
     totalPutOI,
   };
+}
+
+// Daily price history for charting. Changes once per day, so a 15-minute
+// cache is plenty and keeps the dashboard's refreshes cheap.
+const HISTORY_TTL_MS = 15 * 60_000;
+const HISTORY_RANGE_DAYS: Record<string, number> = {
+  "1mo": 31,
+  "3mo": 93,
+  "6mo": 186,
+  "1y": 366,
+};
+const historyCache = new Map<string, CacheEntry<PriceHistoryData>>();
+
+export async function fetchPriceHistory(
+  ticker: string,
+  range: string
+): Promise<PriceHistoryData> {
+  const upper = ticker.toUpperCase();
+  const key = `${upper}:${range}`;
+  const cached = getCached(historyCache, key);
+  if (cached) return cached;
+  return dedup(`history:${key}`, () => fetchPriceHistoryUncached(upper, range, key));
+}
+
+async function fetchPriceHistoryUncached(
+  upper: string,
+  range: string,
+  key: string
+): Promise<PriceHistoryData> {
+  const days = HISTORY_RANGE_DAYS[range] ?? HISTORY_RANGE_DAYS["3mo"];
+  const period1 = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const result = await yf.chart(upper, { period1, interval: "1d" });
+  const quotes = (result?.quotes ?? []) as Array<{
+    date?: Date | string;
+    close?: number | null;
+    volume?: number | null;
+  }>;
+  const points: PricePointData[] = [];
+  for (const q of quotes) {
+    if (q.close == null || !q.date) continue;
+    const d = q.date instanceof Date ? q.date : new Date(q.date);
+    if (Number.isNaN(d.getTime())) continue;
+    points.push({
+      date: d.toISOString().slice(0, 10),
+      close: round2(q.close),
+      volume: q.volume ?? 0,
+    });
+  }
+  if (points.length === 0) {
+    throw new Error(`No price history for ${upper}`);
+  }
+  const history: PriceHistoryData = { ticker: upper, range, points };
+  setCached(historyCache, key, history, HISTORY_TTL_MS);
+  return history;
 }

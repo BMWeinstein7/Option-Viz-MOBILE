@@ -109,6 +109,63 @@ export interface StrategyAnalysis {
   riskRewardRatio?: number | null;
 }
 
+export interface PutCallRatio {
+  ticker: string;
+  volRatio: number;
+  oiRatio: number;
+  totalCallVol: number;
+  totalPutVol: number;
+  totalCallOI: number;
+  totalPutOI: number;
+}
+
+export interface StrikeSummary {
+  strike: number;
+  callOpenInterest: number;
+  putOpenInterest: number;
+  callVolume: number;
+  putVolume: number;
+  callIV: number;
+  putIV: number;
+  callBid: number;
+  callAsk: number;
+  putBid: number;
+  putAsk: number;
+}
+
+export type ChainSummarySource =
+  (typeof ChainSummarySource)[keyof typeof ChainSummarySource];
+
+export const ChainSummarySource = {
+  live: "live",
+  simulated: "simulated",
+} as const;
+
+export interface ChainSummary {
+  ticker: string;
+  expiration: string;
+  spotPrice: number;
+  source: ChainSummarySource;
+  maxPain: number | null;
+  totalCallOpenInterest: number;
+  totalPutOpenInterest: number;
+  totalCallVolume: number;
+  totalPutVolume: number;
+  strikes: StrikeSummary[];
+}
+
+export interface PricePoint {
+  date: string;
+  close: number;
+  volume: number;
+}
+
+export interface PriceHistory {
+  ticker: string;
+  range: string;
+  points: PricePoint[];
+}
+
 export interface AuthUser {
   id: string;
   /** @nullable */
@@ -155,6 +212,20 @@ export interface ErrorEnvelope {
  * Opaque session token — `Bearer <sid>`.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type GetPriceHistoryParams = {
+  range?: GetPriceHistoryRange;
+};
+
+export type GetPriceHistoryRange =
+  (typeof GetPriceHistoryRange)[keyof typeof GetPriceHistoryRange];
+
+export const GetPriceHistoryRange = {
+  "1mo": "1mo",
+  "3mo": "3mo",
+  "6mo": "6mo",
+  "1y": "1y",
+} as const;
 
 export type BeginBrowserLoginParams = {
   /**

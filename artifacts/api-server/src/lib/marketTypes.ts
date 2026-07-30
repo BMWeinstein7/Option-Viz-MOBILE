@@ -66,3 +66,43 @@ export interface PutCallRatio {
   totalCallOI: number;
   totalPutOI: number;
 }
+
+export interface StrikeSummaryData {
+  strike: number;
+  callOpenInterest: number;
+  putOpenInterest: number;
+  callVolume: number;
+  putVolume: number;
+  callIV: number;
+  putIV: number;
+  callBid: number;
+  callAsk: number;
+  putBid: number;
+  putAsk: number;
+}
+
+export interface ChainSummaryData {
+  ticker: string;
+  expiration: string;
+  spotPrice: number;
+  source: "live" | "simulated";
+  /** Strike where aggregate payout to option holders at expiry is smallest. */
+  maxPain: number | null;
+  totalCallOpenInterest: number;
+  totalPutOpenInterest: number;
+  totalCallVolume: number;
+  totalPutVolume: number;
+  strikes: StrikeSummaryData[];
+}
+
+export interface PricePointData {
+  date: string;
+  close: number;
+  volume: number;
+}
+
+export interface PriceHistoryData {
+  ticker: string;
+  range: string;
+  points: PricePointData[];
+}

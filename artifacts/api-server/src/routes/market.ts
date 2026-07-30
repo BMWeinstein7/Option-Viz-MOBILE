@@ -6,6 +6,8 @@ import {
   fetchOptionsChain,
   fetchOptionsFlow,
   fetchPutCallRatio,
+  fetchChainSummary,
+  fetchPriceHistory,
 } from "../lib/marketData.js";
 
 const router: IRouter = Router();
@@ -103,6 +105,45 @@ router.get("/market/pcr/:ticker", async (req, res) => {
     res.json({ ticker, ...pcr });
   } catch (error) {
     res.status(500).json({ error: "SERVER_ERROR", message: "Could not fetch put/call ratio" });
+  }
+});
+
+const EXPIRATION_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidExpiration(raw: string): boolean {
+  if (!EXPIRATION_RE.test(raw)) return false;
+  const [y, m, d] = raw.split("-").map(Number);
+  const parsed = new Date(y, m - 1, d);
+  return parsed.getFullYear() === y && parsed.getMonth() === m - 1 && parsed.getDate() === d;
+}
+
+router.get("/market/chain-summary/:ticker/:expiration", async (req, res) => {
+  try {
+    const ticker = sanitizeTicker(req.params.ticker);
+    if (!ticker) { res.status(400).json({ error: "BAD_REQUEST", message: "Invalid ticker format" }); return; }
+    const expiration = req.params.expiration;
+    if (!isValidExpiration(expiration)) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "Invalid expiration date (YYYY-MM-DD)" }); return;
+    }
+    const summary = await fetchChainSummary(ticker, expiration);
+    res.json(summary);
+  } catch (error) {
+    res.status(404).json({ error: "NOT_FOUND", message: "Could not fetch chain summary" });
+  }
+});
+
+const HISTORY_RANGES = new Set(["1mo", "3mo", "6mo", "1y"]);
+
+router.get("/market/history/:ticker", async (req, res) => {
+  try {
+    const ticker = sanitizeTicker(req.params.ticker);
+    if (!ticker) { res.status(400).json({ error: "BAD_REQUEST", message: "Invalid ticker format" }); return; }
+    const rangeParam = typeof req.query.range === "string" ? req.query.range : "3mo";
+    const range = HISTORY_RANGES.has(rangeParam) ? rangeParam : "3mo";
+    const history = await fetchPriceHistory(ticker, range);
+    res.json(history);
+  } catch (error) {
+    res.status(404).json({ error: "NOT_FOUND", message: "Could not fetch price history" });
   }
 });
 

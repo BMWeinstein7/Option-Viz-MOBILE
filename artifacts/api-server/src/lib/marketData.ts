@@ -5,6 +5,9 @@ import type {
   FlowEntry,
   OptionsFlowData,
   PutCallRatio,
+  StrikeSummaryData,
+  ChainSummaryData,
+  PriceHistoryData,
 } from "./marketTypes.js";
 import * as live from "./marketDataLive.js";
 import * as finnhub from "./marketDataFinnhub.js";
@@ -17,6 +20,9 @@ export type {
   FlowEntry,
   OptionsFlowData,
   PutCallRatio,
+  StrikeSummaryData,
+  ChainSummaryData,
+  PriceHistoryData,
 } from "./marketTypes.js";
 
 /**
@@ -133,6 +139,117 @@ export async function fetchPutCallRatio(ticker: string): Promise<PutCallRatio> {
     async () => ({ ...(await live.fetchPutCallRatio(ticker)), source: "live" }),
     async () => ({ ...(await simulated.fetchPutCallRatio(ticker)), source: "simulated" })
   );
+}
+
+/**
+ * Aggregated per-strike view of one expiration for charting (OI/volume by
+ * strike, IV smile, max pain). Engine-agnostic: uses the routed chain, so
+ * it works off live or simulated data and reports which via `source`.
+ */
+export async function fetchChainSummary(
+  ticker: string,
+  expiration: string
+): Promise<ChainSummaryData> {
+  const upper = ticker.toUpperCase();
+  const chain = await fetchOptionsChain(upper, expiration);
+
+  const byStrike = new Map<number, StrikeSummaryData>();
+  const ensure = (strike: number): StrikeSummaryData => {
+    let row = byStrike.get(strike);
+    if (!row) {
+      row = {
+        strike,
+        callOpenInterest: 0,
+        putOpenInterest: 0,
+        callVolume: 0,
+        putVolume: 0,
+        callIV: 0,
+        putIV: 0,
+        callBid: 0,
+        callAsk: 0,
+        putBid: 0,
+        putAsk: 0,
+      };
+      byStrike.set(strike, row);
+    }
+    return row;
+  };
+  for (const c of chain.calls) {
+    const row = ensure(c.strike);
+    row.callOpenInterest = c.openInterest;
+    row.callVolume = c.volume;
+    row.callIV = c.impliedVolatility;
+    row.callBid = c.bid;
+    row.callAsk = c.ask;
+  }
+  for (const p of chain.puts) {
+    const row = ensure(p.strike);
+    row.putOpenInterest = p.openInterest;
+    row.putVolume = p.volume;
+    row.putIV = p.impliedVolatility;
+    row.putBid = p.bid;
+    row.putAsk = p.ask;
+  }
+  const strikes = [...byStrike.values()].sort((a, b) => a.strike - b.strike);
+
+  let totalCallOpenInterest = 0;
+  let totalPutOpenInterest = 0;
+  let totalCallVolume = 0;
+  let totalPutVolume = 0;
+  for (const s of strikes) {
+    totalCallOpenInterest += s.callOpenInterest;
+    totalPutOpenInterest += s.putOpenInterest;
+    totalCallVolume += s.callVolume;
+    totalPutVolume += s.putVolume;
+  }
+
+  // Max pain: the strike where the aggregate intrinsic value paid out to
+  // option holders at expiry would be smallest. Meaningless when OI is
+  // zero across the board (Yahoo reports OI=0 overnight) — report null.
+  let maxPain: number | null = null;
+  let minPayout = Number.POSITIVE_INFINITY;
+  if (totalCallOpenInterest + totalPutOpenInterest > 0) {
+    for (const candidate of strikes) {
+      const k = candidate.strike;
+      let payout = 0;
+      for (const s of strikes) {
+        payout += Math.max(k - s.strike, 0) * s.callOpenInterest;
+        payout += Math.max(s.strike - k, 0) * s.putOpenInterest;
+      }
+      if (payout < minPayout) {
+        minPayout = payout;
+        maxPain = k;
+      }
+    }
+  }
+
+  return {
+    ticker: upper,
+    expiration,
+    spotPrice: chain.spotPrice,
+    source: chain.source ?? "live",
+    maxPain,
+    totalCallOpenInterest,
+    totalPutOpenInterest,
+    totalCallVolume,
+    totalPutVolume,
+    strikes,
+  };
+}
+
+/**
+ * Recent daily closes for charting. Live-provider only (the simulated
+ * engine has no history); callers should surface a clear error state if
+ * this fails rather than falling back to fabricated history.
+ */
+export async function fetchPriceHistory(
+  ticker: string,
+  range: string
+): Promise<PriceHistoryData> {
+  if (FORCE_SIMULATED) {
+    throw new Error("Price history is unavailable with simulated market data");
+  }
+  return live.fetchPriceHistory(ticker, range);
 }
 
 export function formatNumber(num: number | null | undefined): string {
