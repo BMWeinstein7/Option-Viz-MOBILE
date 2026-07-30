@@ -205,10 +205,11 @@ function collectFlow(
   expiration: string,
   contracts: OptionContractData[],
   type: "CALL" | "PUT",
-  out: FlowEntry[]
+  out: FlowEntry[],
+  requireOpenInterest: boolean
 ): void {
   for (const contract of contracts) {
-    if (contract.volume > 100 && contract.openInterest > 0) {
+    if (contract.volume > 100 && (!requireOpenInterest || contract.openInterest > 0)) {
       out.push({
         ticker,
         expiration,
@@ -219,7 +220,10 @@ function collectFlow(
         last: contract.lastPrice,
         volume: contract.volume,
         openInterest: contract.openInterest,
-        volOiRatio: Math.round((contract.volume / contract.openInterest) * 100) / 100,
+        volOiRatio:
+          contract.openInterest > 0
+            ? Math.round((contract.volume / contract.openInterest) * 100) / 100
+            : 0,
         iv: contract.impliedVolatility,
         inTheMoney: contract.inTheMoney,
       });
@@ -236,8 +240,21 @@ export async function fetchOptionsFlow(ticker: string): Promise<FlowEntry[]> {
     expirations.slice(0, 4).map(async (exp) => ({ exp, chain: await fetchOptionsChain(upper, exp) }))
   );
   for (const { exp, chain } of chains) {
-    collectFlow(upper, exp, chain.calls, "CALL", flowData);
-    collectFlow(upper, exp, chain.puts, "PUT", flowData);
+    collectFlow(upper, exp, chain.calls, "CALL", flowData, true);
+    collectFlow(upper, exp, chain.puts, "PUT", flowData, true);
+  }
+
+  // Yahoo reports openInterest=0 for every contract outside market hours,
+  // which would reject all rows. Fall back to volume-only ranking so the
+  // Flow tab stays useful pre-market / after hours.
+  if (flowData.length === 0) {
+    console.warn(
+      `[marketDataLive] flow ${upper}: no contracts pass the volume+OI filter (Yahoo often reports OI=0 outside market hours); falling back to volume-only ranking`
+    );
+    for (const { exp, chain } of chains) {
+      collectFlow(upper, exp, chain.calls, "CALL", flowData, false);
+      collectFlow(upper, exp, chain.puts, "PUT", flowData, false);
+    }
   }
 
   flowData.sort((a, b) => b.volume - a.volume);

@@ -536,6 +536,16 @@ export default function MarketScreen() {
 
           {flowLoading ? (
             <ActivityIndicator color={Colors.accent} style={{ marginTop: 40 }} />
+          ) : flowData && flowData.flow.length === 0 ? (
+            <View style={styles.flowEmptyState}>
+              <Feather name="wind" size={28} color={Colors.textMuted} />
+              <Text style={styles.flowEmptyTitle}>No qualifying flow right now</Text>
+              <Text style={styles.flowEmptyText}>
+                No contracts currently meet the volume threshold — open interest
+                data is often unavailable outside market hours. Try again during
+                the trading session or search another ticker.
+              </Text>
+            </View>
           ) : flowData ? (
             <>
               <View style={styles.flowHeader}>
@@ -611,6 +621,16 @@ const styles = StyleSheet.create({
   changeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   separator: { height: 1, backgroundColor: Colors.glassBorder, marginHorizontal: 20 },
   scroll: { flex: 1 },
+  flowEmptyState: {
+    alignItems: "center", gap: 10, paddingVertical: 40, paddingHorizontal: 24,
+    backgroundColor: Colors.glass, borderRadius: 16, marginTop: 12,
+    borderWidth: 1, borderColor: Colors.glassBorder,
+  },
+  flowEmptyTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: Colors.textPrimary },
+  flowEmptyText: {
+    fontSize: 12, color: Colors.textMuted, fontFamily: "Inter_400Regular",
+    textAlign: "center", lineHeight: 18,
+  },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 120 },
   chainContainer: { flex: 1, paddingHorizontal: 20, gap: 10 },
   chainSearch: { flexDirection: "row", gap: 10 },
