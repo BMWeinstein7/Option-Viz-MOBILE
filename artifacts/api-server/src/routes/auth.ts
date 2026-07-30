@@ -11,6 +11,12 @@ import {
   SESSION_TTL,
   type SessionData,
 } from "../lib/auth";
+import {
+  authLimiter,
+  accountLockout,
+  recordLoginFailure,
+  recordLoginSuccess,
+} from "../middlewares/authRateLimit";
 
 const router: IRouter = Router();
 
@@ -32,7 +38,7 @@ router.get("/auth/user", (req: Request, res: Response) => {
   });
 });
 
-router.post("/auth/register", async (req: Request, res: Response) => {
+router.post("/auth/register", authLimiter, async (req: Request, res: Response) => {
   const { email, password, firstName, lastName } = req.body;
 
   if (!email || !password) {
@@ -52,8 +58,8 @@ router.post("/auth/register", async (req: Request, res: Response) => {
     return;
   }
 
-  if (password.length < 6) {
-    res.status(400).json({ error: "Password must be at least 6 characters" });
+  if (password.length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters" });
     return;
   }
 
@@ -100,7 +106,7 @@ router.post("/auth/register", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/auth/login", async (req: Request, res: Response) => {
+router.post("/auth/login", authLimiter, accountLockout, async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -122,15 +128,19 @@ router.post("/auth/login", async (req: Request, res: Response) => {
       .where(eq(usersTable.email, trimmedEmail));
 
     if (!user || !user.passwordHash) {
+      recordLoginFailure(trimmedEmail);
       res.status(401).json({ error: "Invalid email or password" });
       return;
     }
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
+      recordLoginFailure(trimmedEmail);
       res.status(401).json({ error: "Invalid email or password" });
       return;
     }
+
+    recordLoginSuccess(trimmedEmail);
 
     const sessionData: SessionData = {
       user: {

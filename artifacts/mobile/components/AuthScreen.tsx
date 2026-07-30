@@ -128,7 +128,7 @@ export function AuthScreen({ onLogin, onRegister, onGuest }: AuthScreenProps) {
               style={styles.passwordInput}
               value={password}
               onChangeText={setPassword}
-              placeholder={mode === "register" ? "Min 6 characters" : "Enter password"}
+              placeholder={mode === "register" ? "Min 8 characters" : "Enter password"}
               placeholderTextColor={Colors.textMuted}
               secureTextEntry={!showPassword}
               autoCapitalize="none"

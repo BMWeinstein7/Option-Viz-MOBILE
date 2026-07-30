@@ -215,6 +215,9 @@ importers:
       express:
         specifier: ^5
         version: 5.2.1
+      express-rate-limit:
+        specifier: ^8.6.1
+        version: 8.6.1(express@5.2.1)
       yahoo-finance2:
         specifier: ^4.0.0
         version: 4.0.0
