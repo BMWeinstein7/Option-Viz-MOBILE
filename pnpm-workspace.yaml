@@ -95,6 +95,8 @@ overrides:
   esbuild>@esbuild/win32-ia32: '-'
   esbuild>@esbuild/win32-x64: '-'
   fast-uri: ^3.1.2
+# CVE-2026-59869: js-yaml 4.1.1 vulnerable, fixed in 4.2.0 (v3 line not flagged)
+  js-yaml@4: ^4.2.0
   lightningcss>lightningcss-android-arm64: '-'
   lightningcss>lightningcss-darwin-arm64: '-'
   lightningcss>lightningcss-darwin-x64: '-'
@@ -113,6 +115,10 @@ overrides:
   picomatch@4: ^4.0.4
   postcss: ^8.5.18
   qs: ^6.15.2
+# CVE-2026-59873: tar 7.5.11 vulnerable (critical), fix available in 7.5.19
+  tar@7: ^7.5.19
+# CVE-2026-12151: undici 6.24.1 vulnerable, pull latest patched 6.x
+  undici@6: ^6.26.0
   rollup>@rollup/rollup-android-arm-eabi: '-'
   rollup>@rollup/rollup-android-arm64: '-'
   rollup>@rollup/rollup-darwin-arm64: '-'
