@@ -53,9 +53,9 @@ A full-featured options strategy builder, visualizer, and paper-trading companio
 - **Guest mode** — full functionality with local AsyncStorage persistence; 30-minute inactivity timeout clears guest data
 - Profile menu drawer with user stats, preferences, sign-out, and "Log In / Sign Up" for guests
 
-## Important: Market Data Is Simulated
+## Market Data: Live via Yahoo Finance
 
-All quotes, options chains, flow, and put/call ratios are **synthetically generated** (deterministic seeded randomness around realistic base prices for 90+ known tickers, hash-based fallback for any other symbol). Options are priced with a real Black-Scholes engine over the simulated spot prices, so strategy math is internally consistent — but prices are **not** real market data and must not be used for actual trading decisions. Connecting a live market data provider (e.g. a brokerage or market data API) is a planned enhancement.
+Quotes, expirations, and options chains are now served **live from Yahoo Finance** (via `yahoo-finance2`, no API key required). The previous synthetic engine (seeded randomness + Black-Scholes pricing) remains as an **explicit, logged fallback** when the live source is unavailable, so the app keeps working offline or under rate limits. Data is for education and analysis — not a substitute for broker-grade quotes when placing real trades.
 
 ## Tech Stack
 
@@ -158,13 +158,19 @@ pnpm --filter @workspace/api-server run dev
 pnpm --filter @workspace/mobile run dev
 ```
 
+## Recent Updates
+
+- **Live market data** — quotes, expirations, and options chains now come from Yahoo Finance (`yahoo-finance2`), with the simulated Black-Scholes engine as a logged fallback
+- **Project slide deck** — a 9-slide presentation of the app lives at `artifacts/optionviz-deck` (Liquid Glass themed, exportable to PPTX/PDF)
+- **Security hardening** — uuid/ws/qs dependency vulnerabilities remediated via pnpm overrides; security scan follow-ups tracked as project tasks
+
 ## Release History
 
 See [`replit.md`](replit.md) for full per-version release notes (v3.0.0 → v3.4.0), covering the strategy platform, trade tracking, performance analytics, auth, margin calculator, deep linking, and security hardening.
 
 ## Disclaimer
 
-OptionViz is an educational and analytical tool. Market data is simulated. Nothing in this app constitutes financial advice; options trading involves substantial risk.
+OptionViz is an educational and analytical tool. Nothing in this app constitutes financial advice; options trading involves substantial risk.
 
 ## License
 

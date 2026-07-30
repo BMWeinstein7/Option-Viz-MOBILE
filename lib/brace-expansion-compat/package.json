@@ -1,0 +1,10 @@
+{
+  "name": "@workspace/brace-expansion-compat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Security shim: exposes brace-expansion@5 (patched for CVE-2026-14257 / CVE-2026-13149) with the v1/v2 CommonJS default-function API expected by minimatch and other legacy consumers.",
+  "main": "index.js",
+  "dependencies": {
+    "brace-expansion-v5": "npm:brace-expansion@^5.0.8"
+  }
+}
