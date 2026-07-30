@@ -77,6 +77,7 @@ router.get("/market/chain/:ticker/:expiration", async (req, res) => {
       spotPrice: chain.spotPrice,
       calls: chain.calls,
       puts: chain.puts,
+      source: chain.source,
     });
   } catch (error) {
     res.status(404).json({ error: "NOT_FOUND", message: "Could not fetch options chain" });

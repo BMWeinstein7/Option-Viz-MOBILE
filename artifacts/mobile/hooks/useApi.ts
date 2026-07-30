@@ -37,6 +37,8 @@ export interface StockQuote {
   previousClose: number;
   name: string;
   marketCap?: number;
+  /** Where the data came from: a real market data provider or the simulated engine. */
+  source?: "live" | "simulated";
 }
 
 export interface OptionContract {
@@ -60,6 +62,8 @@ export interface OptionsChain {
   spotPrice: number;
   calls: OptionContract[];
   puts: OptionContract[];
+  /** Where the data came from: a real market data provider or the simulated engine. */
+  source?: "live" | "simulated";
 }
 
 export interface PnLPoint {

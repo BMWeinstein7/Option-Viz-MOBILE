@@ -21,6 +21,7 @@ import { api, OptionsChain, StockQuote, FlowEntry, PutCallRatio } from "@/hooks/
 import { ProfileButton } from "@/components/ProfileMenu";
 import { Analytics, AnalyticsEvents } from "@/lib/analytics";
 import { useAppContext } from "@/context/AppContext";
+import { DataSourceBadge } from "@/components/DataSourceBadge";
 
 type MarketView = "quotes" | "chain" | "flow";
 
@@ -75,7 +76,10 @@ function QuoteRow({ ticker, onPress }: { ticker: string; onPress?: () => void })
   return (
     <Pressable style={styles.quoteRow} onPress={onPress}>
       <View style={styles.quoteRowLeft}>
-        <Text style={styles.quoteRowTicker}>{data.ticker}</Text>
+        <View style={styles.quoteRowTickerRow}>
+          <Text style={styles.quoteRowTicker}>{data.ticker}</Text>
+          {data.source === "simulated" && <DataSourceBadge source="simulated" />}
+        </View>
         <Text style={styles.quoteRowName} numberOfLines={1}>{data.name}</Text>
       </View>
       <View style={styles.quoteRowRight}>
@@ -148,10 +152,7 @@ function LiveQuoteDetail({ ticker }: { ticker: string }) {
           <Text style={[styles.liveDetailChg, { color: isUp ? Colors.accent : Colors.red }]}>
             {isUp ? "+" : ""}{data.change.toFixed(2)} ({isUp ? "+" : ""}{data.changePercent.toFixed(2)}%)
           </Text>
-          <View style={styles.liveBadge}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveText}>STREAMING</Text>
-          </View>
+          <DataSourceBadge source={data.source} liveLabel="LIVE · STREAMING" />
         </View>
       </View>
       <View style={styles.liveStats}>
@@ -382,10 +383,7 @@ export default function MarketScreen() {
             <View style={styles.chainMeta}>
               <Text style={styles.chainTicker}>{chain.ticker}</Text>
               <Text style={styles.chainSpot}>Spot: ${chain.spotPrice.toFixed(2)}</Text>
-              <View style={styles.liveBadge}>
-                <View style={styles.liveDot} />
-                <Text style={styles.liveText}>LIVE</Text>
-              </View>
+              <DataSourceBadge source={chain.source} />
             </View>
           )}
 
@@ -610,6 +608,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14, paddingHorizontal: 20,
   },
   quoteRowLeft: { flex: 1 },
+  quoteRowTickerRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   quoteRowTicker: { fontSize: 15, fontFamily: "Inter_700Bold", color: Colors.textPrimary },
   quoteRowName: { fontSize: 12, color: Colors.textMuted, fontFamily: "Inter_400Regular", marginTop: 2, maxWidth: 180 },
   quoteRowRight: { alignItems: "flex-end", gap: 4 },

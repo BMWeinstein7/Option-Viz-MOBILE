@@ -26,6 +26,7 @@ import { useAppContext, TradeLeg } from "@/context/AppContext";
 import { Analytics, AnalyticsEvents } from "@/lib/analytics";
 import { fmtMoney } from "@/lib/format";
 import { calculateMargin } from "@/lib/marginCalc";
+import { DataSourceBadge } from "@/components/DataSourceBadge";
 
 const MOST_ACTIVE = ["SPY", "AAPL", "TSLA", "NVDA", "AMD", "MSFT", "QQQ", "META", "AMZN", "GOOGL"];
 
@@ -600,10 +601,7 @@ export default function BuilderScreen() {
             <View style={styles.legsHeaderRow}>
               <Text style={styles.sectionTitle}>{selectedTemplateId ? "Review Legs" : "Build Custom Strategy"}</Text>
               {chain && (
-                <View style={styles.liveBadge}>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.liveText}>LIVE PRICES</Text>
-                </View>
+                <DataSourceBadge source={chain.source} liveLabel="LIVE PRICES" />
               )}
             </View>
 
