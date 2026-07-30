@@ -3,6 +3,7 @@ import type {
   OptionContractData,
   OptionsChainData,
   FlowEntry,
+  OptionsFlowData,
   PutCallRatio,
 } from "./marketTypes.js";
 import * as live from "./marketDataLive.js";
@@ -14,6 +15,7 @@ export type {
   OptionContractData,
   OptionsChainData,
   FlowEntry,
+  OptionsFlowData,
   PutCallRatio,
 } from "./marketTypes.js";
 
@@ -115,21 +117,21 @@ export async function fetchOptionsChain(
   );
 }
 
-export async function fetchOptionsFlow(ticker: string): Promise<FlowEntry[]> {
-  return withFallback(
+export async function fetchOptionsFlow(ticker: string): Promise<OptionsFlowData> {
+  return withFallback<OptionsFlowData>(
     "flow",
     ticker,
-    () => live.fetchOptionsFlow(ticker),
-    () => simulated.fetchOptionsFlow(ticker)
+    async () => ({ flow: await live.fetchOptionsFlow(ticker), source: "live" }),
+    async () => ({ flow: await simulated.fetchOptionsFlow(ticker), source: "simulated" })
   );
 }
 
 export async function fetchPutCallRatio(ticker: string): Promise<PutCallRatio> {
-  return withFallback(
+  return withFallback<PutCallRatio>(
     "pcr",
     ticker,
-    () => live.fetchPutCallRatio(ticker),
-    () => simulated.fetchPutCallRatio(ticker)
+    async () => ({ ...(await live.fetchPutCallRatio(ticker)), source: "live" }),
+    async () => ({ ...(await simulated.fetchPutCallRatio(ticker)), source: "simulated" })
   );
 }
 

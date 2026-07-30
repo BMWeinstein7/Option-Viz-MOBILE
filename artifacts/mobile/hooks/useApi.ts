@@ -122,6 +122,7 @@ export interface FlowEntry {
 
 export interface PutCallRatio {
   ticker: string;
+  source?: "live" | "simulated";
   volRatio: number;
   oiRatio: number;
   totalCallVol: number;
@@ -164,7 +165,7 @@ export const api = {
     apiFetch<OptionsChain>(`/market/chain/${ticker}/${expiration}`),
 
   getFlow: (ticker: string) =>
-    apiFetch<{ ticker: string; flow: FlowEntry[] }>(`/market/flow/${ticker}`),
+    apiFetch<{ ticker: string; flow: FlowEntry[]; source?: "live" | "simulated" }>(`/market/flow/${ticker}`),
 
   getPutCallRatio: (ticker: string) =>
     apiFetch<PutCallRatio>(`/market/pcr/${ticker}`),

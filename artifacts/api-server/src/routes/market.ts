@@ -88,8 +88,8 @@ router.get("/market/flow/:ticker", async (req, res) => {
   try {
     const ticker = sanitizeTicker(req.params.ticker);
     if (!ticker) { res.status(400).json({ error: "BAD_REQUEST", message: "Invalid ticker format" }); return; }
-    const flow = await fetchOptionsFlow(ticker);
-    res.json({ ticker, flow });
+    const { flow, source } = await fetchOptionsFlow(ticker);
+    res.json({ ticker, flow, source });
   } catch (error) {
     res.status(500).json({ error: "SERVER_ERROR", message: "Could not fetch options flow" });
   }

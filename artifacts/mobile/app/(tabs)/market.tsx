@@ -487,10 +487,7 @@ export default function MarketScreen() {
             <View style={styles.pcrCard}>
               <View style={styles.pcrHeader}>
                 <Text style={styles.pcrTitle}>{flowTicker} Put/Call Ratio</Text>
-                <View style={styles.liveBadge}>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.liveText}>LIVE</Text>
-                </View>
+                <DataSourceBadge source={pcrData.source} />
               </View>
               <View style={styles.pcrStats}>
                 <View style={styles.pcrStat}>
@@ -532,7 +529,10 @@ export default function MarketScreen() {
             </View>
           )}
 
-          <Text style={styles.flowSectionTitle}>Options Flow — Highest Volume</Text>
+          <View style={styles.flowSectionHeader}>
+            <Text style={styles.flowSectionTitle}>Options Flow — Highest Volume</Text>
+            {flowData && <DataSourceBadge source={flowData.source} />}
+          </View>
 
           {flowLoading ? (
             <ActivityIndicator color={Colors.accent} style={{ marginTop: 40 }} />
@@ -589,12 +589,6 @@ const styles = StyleSheet.create({
   liveDetailPrice: { fontSize: 26, fontFamily: "Inter_700Bold", color: Colors.textPrimary },
   liveDetailChange: { alignItems: "flex-end", gap: 6 },
   liveDetailChg: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  liveBadge: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    backgroundColor: Colors.accentDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
-  },
-  liveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.accent },
-  liveText: { fontSize: 9, fontFamily: "Inter_700Bold", color: Colors.accent, letterSpacing: 0.5 },
   liveStats: { flexDirection: "row", justifyContent: "space-between" },
   liveStat: { alignItems: "center" },
   liveStatLabel: { fontSize: 9, color: Colors.textMuted, fontFamily: "Inter_500Medium", letterSpacing: 0.5 },
@@ -675,7 +669,8 @@ const styles = StyleSheet.create({
   pcrBarPut: { backgroundColor: Colors.red, borderTopRightRadius: 4, borderBottomRightRadius: 4 },
   pcrBarLabels: { flexDirection: "row", justifyContent: "space-between" },
   pcrBarLabel: { fontSize: 11, fontFamily: "Inter_500Medium" },
-  flowSectionTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: Colors.textPrimary, marginTop: 12, marginBottom: 8 },
+  flowSectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12, marginBottom: 8 },
+  flowSectionTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: Colors.textPrimary },
   flowHeader: {
     flexDirection: "row", alignItems: "center", paddingVertical: 8,
     borderBottomWidth: 1, borderBottomColor: Colors.glassBorder,

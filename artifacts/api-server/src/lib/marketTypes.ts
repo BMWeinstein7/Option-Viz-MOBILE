@@ -51,7 +51,14 @@ export interface FlowEntry {
   inTheMoney: boolean;
 }
 
+export interface OptionsFlowData {
+  flow: FlowEntry[];
+  source: "live" | "simulated";
+}
+
 export interface PutCallRatio {
+  /** Where the data came from: a real market data provider or the simulated engine. */
+  source?: "live" | "simulated";
   volRatio: number;
   oiRatio: number;
   totalCallVol: number;
