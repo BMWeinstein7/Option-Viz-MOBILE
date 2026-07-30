@@ -36,6 +36,16 @@ artifacts-monorepo/
 └── package.json
 ```
 
+## Pre-Publish Smoke Test
+
+Before publishing, run the production-bundle smoke test — the dev server (tsx/ESM) never exercises the esbuild CJS bundle, so ESM/CJS interop crashes (e.g. yahoo-finance2 default-export wrapping) only surface in production:
+
+```bash
+bash scripts/smoke-prod-server.sh
+```
+
+It builds `artifacts/api-server/dist/index.cjs`, boots it on a test port (`SMOKE_PORT`, default 4198), and asserts `/api/healthz` returns 200. On failure it prints the server's startup output/stack trace. Also registered as the `smoke-prod` validation command.
+
 ## GitHub Repository
 
 - **Repo**: https://github.com/BMWeinstein7/Option-Viz-MOBILE
