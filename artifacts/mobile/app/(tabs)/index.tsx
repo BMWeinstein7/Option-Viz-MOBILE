@@ -91,6 +91,7 @@ export default function BuilderScreen() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [showAddLeg, setShowAddLeg] = useState(false);
   const [newLeg, setNewLeg] = useState({ action: "buy" as "buy"|"sell", type: "call" as "call"|"put", strike: "", premium: "", quantity: "1" });
+  const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
 
   const {
     data: quote,
@@ -150,9 +151,8 @@ export default function BuilderScreen() {
         const templateId = builderIntent.optionType === "call" ? "long_call" : "long_put";
         const template = STRATEGY_TEMPLATES.find((s) => s.id === templateId);
         if (template) {
-          setSelectedTemplateId(templateId);
-          setLegs(template.legs.map((l, i) => ({ ...l, id: `intent-${i}` })));
-          setStep("legs");
+          setPendingTemplateId(templateId);
+          setStep("template");
         } else {
           setStep("template");
         }
@@ -273,6 +273,13 @@ export default function BuilderScreen() {
     },
     [quote, expirationsData, chain]
   );
+
+  useEffect(() => {
+    if (pendingTemplateId && quote) {
+      setPendingTemplateId(null);
+      handleTemplateSelect(pendingTemplateId);
+    }
+  }, [pendingTemplateId, quote, handleTemplateSelect]);
 
   const handleCustomStrategy = useCallback(() => {
     if (!quote) return;
