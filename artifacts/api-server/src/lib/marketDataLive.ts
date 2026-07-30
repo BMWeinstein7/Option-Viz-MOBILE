@@ -47,6 +47,19 @@ function setCached<T>(map: Map<string, CacheEntry<T>>, key: string, value: T, tt
   }
 }
 
+// In-flight request dedup: when a cache entry expires while several
+// consumers poll the same key (e.g. flow/PCR fan out over expirations),
+// only one upstream Yahoo request is made and everyone shares the result.
+const inFlight = new Map<string, Promise<unknown>>();
+
+function dedup<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const existing = inFlight.get(key);
+  if (existing) return existing as Promise<T>;
+  const p = fn().finally(() => inFlight.delete(key));
+  inFlight.set(key, p);
+  return p;
+}
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
@@ -55,7 +68,10 @@ export async function fetchStockQuote(ticker: string): Promise<QuoteData> {
   const upper = ticker.toUpperCase();
   const cached = getCached(quoteCache, upper);
   if (cached) return cached;
+  return dedup(`quote:${upper}`, () => fetchStockQuoteUncached(upper));
+}
 
+async function fetchStockQuoteUncached(upper: string): Promise<QuoteData> {
   const q = await yf.quote(upper);
   if (q?.regularMarketPrice == null) {
     throw new Error(`No live quote for ${upper}`);
@@ -91,7 +107,10 @@ export async function fetchOptionExpirations(ticker: string): Promise<string[]> 
   const upper = ticker.toUpperCase();
   const cached = getCached(expirationsCache, upper);
   if (cached) return cached;
+  return dedup(`exp:${upper}`, () => fetchOptionExpirationsUncached(upper));
+}
 
+async function fetchOptionExpirationsUncached(upper: string): Promise<string[]> {
   const result = await yf.options(upper, {});
   const expirations = (result.expirationDates ?? []).map(toDateString);
   if (expirations.length === 0) {
@@ -151,7 +170,14 @@ export async function fetchOptionsChain(
   const key = `${upper}:${expiration}`;
   const cached = getCached(chainCache, key);
   if (cached) return cached;
+  return dedup(`chain:${key}`, () => fetchOptionsChainUncached(upper, expiration, key));
+}
 
+async function fetchOptionsChainUncached(
+  upper: string,
+  expiration: string,
+  key: string
+): Promise<OptionsChainData> {
   const date = new Date(`${expiration}T00:00:00Z`);
   const result = await yf.options(upper, { date });
   const optionSet = result.options?.[0];

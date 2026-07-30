@@ -36,11 +36,16 @@ const queryClient = new QueryClient({
 
 // Refetch queries immediately when the app returns to the foreground so
 // prices never look frozen after backgrounding (React Query only tracks
-// browser focus by default).
-if (Platform.OS !== "web") {
-  AppState.addEventListener("change", (status: AppStateStatus) => {
-    focusManager.setFocused(status === "active");
-  });
+// browser focus by default). Wired inside the root component with cleanup
+// to avoid duplicate listeners across Fast Refresh.
+function useAppFocusRefetch() {
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const sub = AppState.addEventListener("change", (status: AppStateStatus) => {
+      focusManager.setFocused(status === "active");
+    });
+    return () => sub.remove();
+  }, []);
 }
 
 function AuthGate() {
@@ -82,6 +87,7 @@ function AuthGate() {
 }
 
 export default function RootLayout() {
+  useAppFocusRefetch();
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
