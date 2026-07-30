@@ -28,7 +28,7 @@ export default function UnderTheHood() {
           <div className="flex items-start gap-[1.4vw]">
             <div className="w-[0.35vw] self-stretch rounded-full bg-primary/60 shrink-0" />
             <p className="font-body text-[1.9vw] leading-[1.45] text-text/90" style={{ textWrap: 'pretty' }}>
-              Note: market data is currently simulated via a Black-Scholes engine
+              Live market data via Yahoo Finance, with a Black-Scholes simulated fallback
             </p>
           </div>
         </div>

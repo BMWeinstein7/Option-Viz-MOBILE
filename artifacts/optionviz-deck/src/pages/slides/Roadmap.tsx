@@ -11,7 +11,7 @@ export default function Roadmap() {
           <div className="flex items-center gap-[2vw]">
             <span className="font-display font-bold text-[2.2vw] text-primary w-[4vw] shrink-0">1</span>
             <p className="font-body text-[2.2vw] leading-[1.4] text-text/90" style={{ textWrap: 'pretty' }}>
-              Live market data via a real provider (Schwab / market data API)
+              In-app live vs simulated data indicator and rate-limit resilience
             </p>
           </div>
           <div className="flex items-center gap-[2vw]">
