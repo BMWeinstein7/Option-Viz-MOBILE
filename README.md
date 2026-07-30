@@ -158,11 +158,23 @@ pnpm --filter @workspace/api-server run dev
 pnpm --filter @workspace/mobile run dev
 ```
 
-## Recent Updates
+## Summer Release (July 2026)
 
-- **Live market data** — quotes, expirations, and options chains now come from Yahoo Finance (`yahoo-finance2`), with the simulated Black-Scholes engine as a logged fallback
+The Summer Release moves OptionViz from a simulated sandbox to live market data, hardens security across the stack, and ships production-ready builds.
+
+### Live market data
+- Quotes, expirations, and options chains now stream **live from Yahoo Finance** (`yahoo-finance2`, no API key required)
+- The simulated Black-Scholes engine remains as an explicit, logged fallback so the app keeps working offline or under rate limits
+- Fixed a production-only startup crash caused by ESM/CJS interop in the bundled server, verified with a production health-check smoke test
+
+### Security hardening
+- **Auth protection** — rate limiting and account lockout on login/register endpoints; minimum password length raised to 8
+- **Dependency vulnerabilities remediated** — `uuid`, `brace-expansion` (via a v5 compatibility shim), `vite`, and `postcss` patched through pnpm overrides
+- Remaining security-scan follow-ups (CORS, host header) tracked as project tasks
+
+### Quality & tooling
+- Clean TypeScript builds restored across the mobile app and preview sandbox
 - **Project slide deck** — a 9-slide presentation of the app lives at `artifacts/optionviz-deck` (Liquid Glass themed, exportable to PPTX/PDF)
-- **Security hardening** — uuid/ws/qs dependency vulnerabilities remediated via pnpm overrides; security scan follow-ups tracked as project tasks
 
 ## Release History
 
