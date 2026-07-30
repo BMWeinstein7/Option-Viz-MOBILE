@@ -138,6 +138,13 @@ function mapContract(
   type: "call" | "put"
 ): OptionContractData | null {
   if (c.strike == null) return null;
+  // When markets are closed (or a contract has no live quotes), Yahoo
+  // reports bid/ask as 0. Fall back to the last traded price — the prior
+  // close — so chains never zero out overnight; both sides of the market
+  // show the final price until live quotes resume.
+  const last = c.lastPrice ?? 0;
+  const bid = (c.bid ?? 0) > 0 ? (c.bid as number) : last;
+  const ask = (c.ask ?? 0) > 0 ? (c.ask as number) : last;
   const iv = c.impliedVolatility ?? 0;
   let greeks: { delta?: number; gamma?: number; theta?: number; vega?: number } = {};
   if (iv > 0 && spot > 0 && T > 0) {
@@ -151,9 +158,9 @@ function mapContract(
   }
   return {
     strike: c.strike,
-    lastPrice: round2(c.lastPrice ?? 0),
-    bid: round2(c.bid ?? 0),
-    ask: round2(c.ask ?? 0),
+    lastPrice: round2(last),
+    bid: round2(bid),
+    ask: round2(ask),
     volume: c.volume ?? 0,
     openInterest: c.openInterest ?? 0,
     impliedVolatility: Math.round(iv * 10000) / 100,
