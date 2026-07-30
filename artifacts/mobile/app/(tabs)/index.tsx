@@ -153,7 +153,7 @@ export default function BuilderScreen() {
       setTicker(t);
       setTickerInput(t);
       if (builderIntent.optionType) {
-        const templateId = builderIntent.optionType === "call" ? "long_call" : "long_put";
+        const templateId = builderIntent.optionType === "call" ? "long-call" : "long-put";
         const template = STRATEGY_TEMPLATES.find((s) => s.id === templateId);
         if (template) {
           setPendingTemplateId(templateId);
