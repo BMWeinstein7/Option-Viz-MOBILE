@@ -1,55 +1,103 @@
-# OptionViz Mobile
+# OptionViz
 
-A full-featured options strategy builder and visualizer built with Expo React Native.
+A full-featured options strategy builder, visualizer, and paper-trading companion built with Expo React Native and an Express API backend. Design multi-leg options strategies, analyze P&L with Black-Scholes time-decay curves, track trades with live unrealized P&L, and export professional performance reports.
 
-## Features
+> **Current release: v3.4.0**
 
-### Strategy Builder
-- **12+ Strategy Templates** organized by category: Basic (Long Call/Put), Spreads (Bull Call, Bear Put, Iron Condor, Iron Butterfly), Income (Covered Call, Cash-Secured Put), Volatility (Long Straddle, Long Strangle), Neutral (Short Straddle, Short Strangle), and Hedging (Protective Put, Collar)
-- **Any US Stock Ticker** — search or tap from 90+ popular symbols; unknown tickers get dynamically generated quotes
-- **P&L Charts** with interactive visualization showing profit/loss at expiration
-- **Time-Decay Curves** — dashed overlay lines at 75%, 50%, 25% DTE computed via Black-Scholes per-leg pricing
-- **Greeks Display** — Delta, Gamma, Theta, Vega for each strategy
-- **Break-even Analysis** — automatically calculated break-even points
-- **Max Profit / Max Loss** cards with color-coded display
+![Builder](docs/images/builder-screen.png)
 
-### Market Data (3 Views)
-- **Live Quotes** — auto-refreshing every 3-5 seconds, no manual refresh needed. Shows price, change %, company name for all tickers
-- **Options Chain** — full chain with strike, bid, ask, volume, open interest, IV%, and delta. Calls/Puts toggle, multiple expiration dates
-- **Options Flow** — highest volume flow entries with sentiment tags (Bullish/Bearish/Neutral), plus Put/Call Ratio card showing volume ratio, OI ratio, call/put volume with visual bar
+## Feature Overview
 
-### Portfolio Tracking
-- Save analyzed strategies to your portfolio
-- Track entry/exit prices and P&L
-- Strategies and Trades views
+### Strategy Builder (4-step wizard)
+- **12+ strategy templates** organized by category:
+  - *Basic*: Long Call, Long Put
+  - *Spreads*: Bull Call Spread, Bear Put Spread, Iron Condor, Iron Butterfly, Calendar Spread
+  - *Income*: Covered Call, Cash-Secured Put
+  - *Volatility*: Long Straddle, Long Strangle
+  - *Neutral*: Short Straddle, Short Strangle
+  - *Hedging*: Protective Put, Collar
+- **Custom strategy builder** — add/remove individual option legs freely beyond templates
+- **Most Active tickers** — glassmorphic live quote rows (SPY, AAPL, TSLA, NVDA, AMD, MSFT, QQQ, META, AMZN, GOOGL) with color-coded change %
+- **Live midpoint pricing** — each leg shows bid/ask/mid from the options chain, auto-refreshed every 5 seconds
+- **Editable contract sizes** — +/- quantity steppers per leg
+- **Step-by-step back navigation** — analysis → legs → template → ticker via header back arrow
+- **Margin calculator** — full Reg-T margin logic (naked call/put 20%/10% methods, credit/debit spread detection, multi-leg defined-risk pairing) with margin requirement card and buying-power impact
+
+### Analysis
+- **P&L charts** with interactive expiration payoff visualization
+- **Time-decay curves** — dashed overlays at 75%/50%/25% DTE computed via per-leg Black-Scholes pricing
+- **Greeks** — Delta, Gamma, Theta, Vega per leg and net
+- **Break-even points, max profit / max loss** cards
+- **Margin requirement and buying-power impact** metric cards
+
+### Market Tab (3 views)
+- **Live Quotes** — SSE-streamed quotes with auto-refresh; build button deep-links into the Builder with the ticker pre-filled
+- **Options Chain** — full calls/puts chain with strike, bid, ask, volume, open interest, IV%, and delta across multiple expirations
+- **Options Flow** — highest-volume flow entries with sentiment tags plus a Put/Call Ratio card (volume ratio, OI ratio, visual bar); flow entries deep-link to the Builder with call/put template pre-selected
+
+### Portfolio (3 sub-tabs)
+- **Dashboard** — editable account balance (persisted), stock positions (ticker/shares/avg cost) with live P&L from batch quotes, and total portfolio value (cash + live positions)
+- **Saved Strategies** — synced to PostgreSQL for logged-in users, local for guests
+- **Trades** — open trades directly from the Builder using live midpoints as entry prices; live unrealized P&L; edit entry costs, close at live prices or manually, delete trades
+
+### Performance
+- Total realized P&L, trade counts, win rate %, average gain/loss
+- **Rate of Return** — overall ROR, total capital deployed, average holding days, per-trade annualized ROR
+- Top 5 winners/losers ranked by dollar P&L and percentage return
+- Timeframe filtering (1W/1M/3M/6M/1Y/ALL)
+- **PDF export** — professionally styled report with stats grid, top winners/losers, open positions, and all closed trades (via expo-print + expo-sharing)
+
+### Authentication & Sessions
+- Email/password auth (bcryptjs, 12 salt rounds) with server-side sessions
+- Mobile stores the session token in expo-secure-store and sends it as an Authorization header
+- **Guest mode** — full functionality with local AsyncStorage persistence; 30-minute inactivity timeout clears guest data
+- Profile menu drawer with user stats, preferences, sign-out, and "Log In / Sign Up" for guests
+
+## Important: Market Data Is Simulated
+
+All quotes, options chains, flow, and put/call ratios are **synthetically generated** (deterministic seeded randomness around realistic base prices for 90+ known tickers, hash-based fallback for any other symbol). Options are priced with a real Black-Scholes engine over the simulated spot prices, so strategy math is internally consistent — but prices are **not** real market data and must not be used for actual trading decisions. Connecting a live market data provider (e.g. a brokerage or market data API) is a planned enhancement.
 
 ## Tech Stack
 
-- **Frontend**: Expo React Native (SDK 53), React Navigation with native tabs, React Query for data fetching
-- **Backend**: Express.js API server with TypeScript
-- **Charts**: `react-native-svg` with custom P&L chart component
-- **Styling**: Dark navy theme (#0A0E1A background), Inter font family
+| Layer | Technology |
+|-------|------------|
+| Mobile | Expo React Native (SDK 54), expo-router, React Query |
+| Backend | Express 5 + TypeScript (tsx dev, esbuild CJS bundle for prod) |
+| Database | PostgreSQL + Drizzle ORM |
+| API contract | OpenAPI 3.1 + Orval codegen (React Query hooks, Zod schemas) |
+| Auth | bcryptjs + server-side sessions, expo-secure-store on device |
+| Charts | react-native-svg custom P&L chart |
+| Monorepo | pnpm workspaces, TypeScript project references |
 
 ## Architecture
 
 ```
 artifacts/
-  api-server/          # Express API backend
+  api-server/              # Express API backend
     src/
-      lib/marketData.ts    # Market data generation (any ticker support)
-      routes/market.ts     # Quote, chain, flow, PCR, SSE endpoints
-      routes/strategy.ts   # Strategy analysis with Black-Scholes
-  mobile/              # Expo React Native app
+      lib/marketData.ts        # Simulated market data engine (any ticker)
+      lib/blackScholes.ts      # Black-Scholes pricing + Greeks
+      lib/auth.ts              # Session CRUD
+      middlewares/authMiddleware.ts
+      routes/market.ts         # Quote, chain, flow, PCR, SSE endpoints
+      routes/strategy.ts       # Strategy analysis
+      routes/auth.ts           # Register / login / logout
+      routes/strategies.ts     # Strategy CRUD (persisted)
+  mobile/                  # Expo React Native app (OptionViz)
     app/(tabs)/
-      index.tsx            # Builder tab (strategy wizard)
-      market.tsx           # Market tab (quotes/chain/flow)
-      portfolio.tsx        # Portfolio tab
-    components/
-      PnLChart.tsx         # SVG P&L chart with time-decay curves
-    constants/
-      strategies.ts        # 12+ strategy template definitions
-    hooks/
-      useApi.ts            # API client with React Query hooks
+      index.tsx                # Builder — 4-step strategy wizard
+      market.tsx               # Market — quotes / chain / flow
+      portfolio.tsx            # Portfolio — dashboard / strategies / trades
+      performance.tsx          # Performance — stats + PDF export
+    components/              # PnLChart, LegRow, GreeksBar, AuthScreen, ...
+    context/AppContext.tsx   # Auth state, strategy/trade persistence
+    lib/marginCalc.ts        # Reg-T margin requirement engine
+    constants/strategies.ts  # Strategy template definitions
+lib/
+  api-spec/                # OpenAPI spec + Orval codegen config
+  api-client-react/        # Generated React Query hooks
+  api-zod/                 # Generated Zod schemas
+  db/                      # Drizzle schema (users, saved_strategies)
 ```
 
 ## API Endpoints
@@ -57,18 +105,51 @@ artifacts/
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/market/quote/:ticker` | GET | Single quote |
-| `/api/market/batch-quotes` | POST | Batch quotes for multiple tickers |
-| `/api/market/chain/:ticker` | GET | Options chain with Greeks |
+| `/api/market/batch-quotes` | POST | Batch quotes |
+| `/api/market/expirations/:ticker` | GET | Available expirations |
+| `/api/market/chain/:ticker/:expiration` | GET | Options chain with Greeks |
 | `/api/market/flow/:ticker` | GET | Options flow (highest volume) |
 | `/api/market/pcr/:ticker` | GET | Put/Call ratio (volume + OI) |
-| `/api/market/stream/:ticker` | GET | SSE streaming quotes (3s interval) |
+| `/api/market/stream/:ticker` | GET | SSE streaming quotes |
 | `/api/strategy/analyze` | POST | Strategy P&L analysis with time-decay curves |
+| `/api/auth/register` | POST | Register (email/password) |
+| `/api/auth/login` | POST | Login |
+| `/api/auth/logout` | POST | Clear session |
+| `/api/auth/user` | GET | Current authenticated user |
+| `/api/strategies` | GET/POST | List / save user strategies |
+| `/api/strategies/:id` | DELETE | Delete strategy |
+
+## Security Hardening
+
+- Ticker input sanitization on all market routes + SSE stream (`/^[A-Za-z.]{1,10}$/`)
+- Expiration date and strategy payload validation; batch-quote payload filtering
+- Auth routes and middleware wrapped in try/catch to prevent DB-failure crashes
+- HTML escaping of user-controlled strings in PDF generation
+- Dependency vulnerability remediation via pnpm overrides (`ws`, `qs`, `uuid` — all resolved to patched releases; workspace audit clean of those advisories)
+- Supply-chain defense: minimum release age enforced for npm packages
+
+## Design System — "Liquid Glass"
+
+| Element | Color |
+|---------|-------|
+| Background | `#0D0D12` |
+| Card | `#161620` |
+| Elevated | `#1C1C28` |
+| Glass | `rgba(255,255,255,0.03)` |
+| Glass border | `rgba(255,255,255,0.08)` |
+| Accent (Tiffany Blue) | `#0ABAB5` |
+| Red / Blue / Gold / Purple | `#F43F5E` / `#38BDF8` / `#FBBF24` / `#A78BFA` |
+
+Typography: Inter (400/500/600/700). Full spec in [`docs/DESIGN_SPEC.md`](docs/DESIGN_SPEC.md).
 
 ## Getting Started
 
 ```bash
 # Install dependencies
 pnpm install
+
+# Typecheck everything
+pnpm run typecheck
 
 # Start API server
 pnpm --filter @workspace/api-server run dev
@@ -77,17 +158,13 @@ pnpm --filter @workspace/api-server run dev
 pnpm --filter @workspace/mobile run dev
 ```
 
-## Color Theme
+## Release History
 
-| Element | Color |
-|---------|-------|
-| Background | `#0A0E1A` |
-| Card | `#111827` |
-| Accent Green | `#22c55e` |
-| Accent Red | `#ef4444` |
-| Accent Blue | `#3b82f6` |
-| Accent Gold | `#f59e0b` |
-| Border | `#1e293b` |
+See [`replit.md`](replit.md) for full per-version release notes (v3.0.0 → v3.4.0), covering the strategy platform, trade tracking, performance analytics, auth, margin calculator, deep linking, and security hardening.
+
+## Disclaimer
+
+OptionViz is an educational and analytical tool. Market data is simulated. Nothing in this app constitutes financial advice; options trading involves substantial risk.
 
 ## License
 
