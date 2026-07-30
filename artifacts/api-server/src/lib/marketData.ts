@@ -6,6 +6,7 @@ import type {
   PutCallRatio,
 } from "./marketTypes.js";
 import * as live from "./marketDataLive.js";
+import * as finnhub from "./marketDataFinnhub.js";
 import * as simulated from "./marketDataSimulated.js";
 
 export type {
@@ -19,10 +20,12 @@ export type {
 /**
  * Market data router.
  *
- * Primary provider: live Yahoo Finance data (real quotes, expirations, and
- * options chains). Fallback: the simulated engine, used only when the live
- * provider fails or when MARKET_DATA_PROVIDER=simulated is set explicitly.
- * Every fallback is logged so simulated data is never served silently.
+ * Provider order:
+ *   1. Yahoo Finance (yahoo-finance2, no key) — quotes, expirations, chains.
+ *   2. Finnhub (FINNHUB_API_KEY secret, optional) — quotes only; tried when
+ *      Yahoo fails (rate limits, endpoint changes) before any simulated data.
+ *   3. Simulated engine — last resort, or forced via MARKET_DATA_PROVIDER=simulated.
+ * Every fallback hop is logged so simulated data is never served silently.
  */
 
 const FORCE_SIMULATED = process.env.MARKET_DATA_PROVIDER === "simulated";
@@ -30,20 +33,25 @@ const FORCE_SIMULATED = process.env.MARKET_DATA_PROVIDER === "simulated";
 if (FORCE_SIMULATED) {
   console.warn("[marketData] MARKET_DATA_PROVIDER=simulated — serving simulated market data only");
 } else {
-  console.log("[marketData] Live market data provider enabled (Yahoo Finance), simulated engine kept as fallback");
+  const secondary = finnhub.isConfigured()
+    ? "Finnhub (quotes) as secondary live provider"
+    : "no secondary live provider (set FINNHUB_API_KEY to enable Finnhub)";
+  console.log(
+    `[marketData] Provider order: Yahoo Finance (primary), ${secondary}, simulated engine as last-resort fallback`
+  );
 }
 
 const lastWarnAt = new Map<string, number>();
 const WARN_INTERVAL_MS = 60_000;
 
-function warnFallback(op: string, ticker: string, error: unknown): void {
-  const key = `${op}:${ticker}`;
+function warnFallback(op: string, ticker: string, from: string, to: string, error: unknown): void {
+  const key = `${op}:${ticker}:${to}`;
   const now = Date.now();
   const last = lastWarnAt.get(key) ?? 0;
   if (now - last > WARN_INTERVAL_MS) {
     lastWarnAt.set(key, now);
     const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[marketData] Live ${op} failed for ${ticker}, falling back to simulated data: ${message}`);
+    console.warn(`[marketData] ${from} ${op} failed for ${ticker}, falling back to ${to}: ${message}`);
   }
 }
 
@@ -51,13 +59,23 @@ async function withFallback<T>(
   op: string,
   ticker: string,
   liveFn: () => Promise<T>,
-  simulatedFn: () => Promise<T>
+  simulatedFn: () => Promise<T>,
+  secondaryFn?: () => Promise<T>
 ): Promise<T> {
   if (FORCE_SIMULATED) return simulatedFn();
   try {
     return await liveFn();
-  } catch (error) {
-    warnFallback(op, ticker, error);
+  } catch (primaryError) {
+    if (secondaryFn && finnhub.isConfigured()) {
+      warnFallback(op, ticker, "Yahoo", "Finnhub", primaryError);
+      try {
+        return await secondaryFn();
+      } catch (secondaryError) {
+        warnFallback(op, ticker, "Finnhub", "simulated data", secondaryError);
+        return simulatedFn();
+      }
+    }
+    warnFallback(op, ticker, "Yahoo", "simulated data", primaryError);
     return simulatedFn();
   }
 }
@@ -67,7 +85,8 @@ export async function fetchStockQuote(ticker: string): Promise<QuoteData> {
     "quote",
     ticker,
     () => live.fetchStockQuote(ticker),
-    () => simulated.fetchStockQuote(ticker)
+    () => simulated.fetchStockQuote(ticker),
+    () => finnhub.fetchStockQuote(ticker)
   );
 }
 
