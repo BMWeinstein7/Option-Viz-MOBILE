@@ -106,7 +106,8 @@ router.get("/market/pcr/:ticker", async (req, res) => {
 });
 
 router.get("/market/stream/:ticker", (req: Request, res: Response) => {
-  const ticker = sanitizeTicker(req.params.ticker);
+  const tickerParam = req.params.ticker;
+  const ticker = typeof tickerParam === "string" ? sanitizeTicker(tickerParam) : null;
   if (!ticker) { res.status(400).json({ error: "BAD_REQUEST", message: "Invalid ticker format" }); return; }
 
   res.setHeader("Content-Type", "text/event-stream");

@@ -67,6 +67,10 @@ onlyBuiltDependencies:
   - unrs-resolver
 
 overrides:
+  # Transitive Expo development tooling still requests legacy UUID releases.
+  # uuid@11 retains the CommonJS entry point used by those tools while fixing
+  # GHSA-w5hq-g745-h8pq.
+  uuid: "^11.1.0"
   # replit uses linux-x64 only, we can exclude all other platforms
   "esbuild>@esbuild/darwin-arm64": "-"
   "esbuild>@esbuild/darwin-x64": "-"
