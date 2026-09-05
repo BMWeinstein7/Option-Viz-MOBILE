@@ -43,7 +43,9 @@ function ButtonGroupText({
 }: React.ComponentProps<'div'> & {
   asChild?: boolean;
 }) {
-  const Comp = asChild ? Slot : 'div';
+  // Cast: two @types/react copies exist in this workspace (Expo pins 19.1),
+  // and Slot's prop types from the other copy are nominally incompatible.
+  const Comp = (asChild ? Slot : 'div') as React.ElementType;
 
   return (
     <Comp

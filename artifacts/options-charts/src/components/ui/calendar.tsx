@@ -128,7 +128,9 @@ function Calendar({
           return (
             <div
               data-slot="calendar"
-              ref={rootRef}
+              // Cast: dual @types/react copies in the workspace make the
+              // react-day-picker ref nominally incompatible with div's ref.
+              ref={rootRef as React.Ref<HTMLDivElement>}
               className={cn(className)}
               {...props}
             />
