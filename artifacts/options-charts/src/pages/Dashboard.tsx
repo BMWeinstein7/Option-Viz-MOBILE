@@ -21,6 +21,7 @@ import {
   type StrikeSummary
 } from "@workspace/api-client-react";
 
+import { trackEvent } from "../lib/analytics";
 import { KPICard } from "../components/KPICard";
 import { DashboardCharts } from "../components/DashboardCharts";
 import { StrikesTable } from "../components/StrikesTable";
@@ -56,6 +57,14 @@ export default function Dashboard() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const queryClient = useQueryClient();
+
+  const selectTicker = (next: string, source: "search" | "quick_pick") => {
+    const cleaned = next.trim().toUpperCase();
+    if (!cleaned || cleaned === ticker) return;
+    setTickerInput(cleaned);
+    setTicker(cleaned);
+    trackEvent("ticker_selected", { ticker: cleaned, source });
+  };
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
@@ -186,7 +195,7 @@ export default function Dashboard() {
                   color: isDark ? "#c8c9cc" : "#4b5563",
                 }}
               >
-                <button onClick={handleRefresh} disabled={anyLoading} className="flex items-center gap-1.5 px-2.5 h-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors disabled:opacity-50">
+                <button onClick={() => { trackEvent("manual_refresh", { ticker, expiration }); handleRefresh(); }} disabled={anyLoading} className="flex items-center gap-1.5 px-2.5 h-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors disabled:opacity-50">
                   <RefreshCw className={`w-3.5 h-3.5 ${isSpinning ? "animate-spin" : ""}`} />
                   Refresh
                 </button>
@@ -201,7 +210,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between mb-2 px-2 py-1">
                     <span className="font-semibold text-foreground">Auto-refresh</span>
                     <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
+                      <input type="checkbox" className="sr-only peer" checked={autoRefresh} onChange={(e) => { setAutoRefresh(e.target.checked); trackEvent("auto_refresh_changed", { enabled: e.target.checked, interval_minutes: selectedIntervalMs / 60000 }); }} />
                       <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                     </label>
                   </div>
@@ -214,6 +223,7 @@ export default function Dashboard() {
                           setSelectedIntervalMs(opt.ms);
                           if (!autoRefresh) setAutoRefresh(true);
                           setDropdownOpen(false);
+                          trackEvent("auto_refresh_changed", { enabled: true, interval_minutes: opt.ms / 60000 });
                         }}
                       >
                         {opt.label}
@@ -226,7 +236,7 @@ export default function Dashboard() {
             </div>
 
             <button
-              onClick={() => window.print()}
+              onClick={() => { trackEvent("export_pdf", { ticker, expiration }); window.print(); }}
               className="flex items-center justify-center w-[26px] h-[26px] rounded-[6px] transition-colors"
               style={{ backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "#F0F1F2", color: isDark ? "#c8c9cc" : "#4b5563" }}
               title="Export as PDF"
@@ -234,7 +244,11 @@ export default function Dashboard() {
               <Printer className="w-3.5 h-3.5" />
             </button>
             <button
-              onClick={() => setIsDark((d) => !d)}
+              onClick={() => {
+                const next = !isDark;
+                setIsDark(next);
+                trackEvent("theme_toggled", { theme: next ? "dark" : "light" });
+              }}
               className="flex items-center justify-center w-[26px] h-[26px] rounded-[6px] transition-colors"
               style={{ backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "#F0F1F2", color: isDark ? "#c8c9cc" : "#4b5563" }}
               title="Toggle dark mode"
@@ -252,15 +266,15 @@ export default function Dashboard() {
               <Input 
                 value={tickerInput} 
                 onChange={e => setTickerInput(e.target.value.toUpperCase())} 
-                onKeyDown={e => e.key === "Enter" && setTicker(tickerInput)} 
+                onKeyDown={e => e.key === "Enter" && selectTicker(tickerInput, "search")}
                 placeholder="e.g. SPY" 
                 className="h-10 font-bold bg-background text-base"
               />
-              <Button onClick={() => setTicker(tickerInput)} variant="secondary" className="h-10 px-3"><Search className="w-4 h-4" /></Button>
+              <Button onClick={() => selectTicker(tickerInput, "search")} variant="secondary" className="h-10 px-3"><Search className="w-4 h-4" /></Button>
             </div>
             <div className="flex gap-1.5 mt-2.5">
               {["SPY", "QQQ", "AAPL", "TSLA", "NVDA"].map(t => (
-                <Badge key={t} variant="secondary" className="cursor-pointer font-bold px-2 py-0.5 hover:bg-primary hover:text-primary-foreground transition-colors" onClick={() => { setTickerInput(t); setTicker(t); }}>{t}</Badge>
+                <Badge key={t} variant="secondary" className="cursor-pointer font-bold px-2 py-0.5 hover:bg-primary hover:text-primary-foreground transition-colors" onClick={() => selectTicker(t, "quick_pick")}>{t}</Badge>
               ))}
             </div>
           </div>
@@ -270,7 +284,10 @@ export default function Dashboard() {
             <select 
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm font-semibold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               value={expiration}
-              onChange={e => setExpiration(e.target.value)}
+              onChange={e => {
+                setExpiration(e.target.value);
+                trackEvent("expiration_selected", { ticker, expiration: e.target.value });
+              }}
               disabled={expirationsQuery.isLoading || expirations.length === 0}
             >
               {expirations.length === 0 && <option value="">Loading...</option>}
@@ -287,7 +304,11 @@ export default function Dashboard() {
             <select 
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm font-semibold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               value={historyRange}
-              onChange={e => setHistoryRange(e.target.value as any)}
+              onChange={e => {
+                const range = e.target.value as "1mo" | "3mo" | "6mo" | "1y";
+                setHistoryRange(range);
+                trackEvent("history_range_changed", { ticker, range });
+              }}
             >
               <option value="1mo">1 Month</option>
               <option value="3mo">3 Months</option>

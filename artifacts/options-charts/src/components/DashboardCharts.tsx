@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { CSVLink } from "react-csv";
+import { trackEvent } from "../lib/analytics";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine
@@ -71,7 +72,7 @@ function ChartCard({ title, data, filename, loading, isDark, children }: { title
       <CardHeader className="px-4 pt-4 pb-2 flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base font-semibold">{title}</CardTitle>
         {!loading && data && data.length > 0 && (
-          <CSVLink data={data} filename={filename} className="print:hidden flex items-center justify-center w-[26px] h-[26px] rounded-[6px] transition-colors hover:opacity-80" style={{ backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "#F0F1F2", color: isDark ? "#c8c9cc" : "#4b5563" }} aria-label="Export chart data as CSV">
+          <CSVLink data={data} filename={filename} onClick={() => trackEvent("export_csv", { chart: title })} className="print:hidden flex items-center justify-center w-[26px] h-[26px] rounded-[6px] transition-colors hover:opacity-80" style={{ backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "#F0F1F2", color: isDark ? "#c8c9cc" : "#4b5563" }} aria-label="Export chart data as CSV">
             <Download className="w-3.5 h-3.5" />
           </CSVLink>
         )}
